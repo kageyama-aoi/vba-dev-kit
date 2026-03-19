@@ -462,6 +462,18 @@ End Function
 
 
 '=============================================================================
+' Function IsButtonShape  【内部ヘルパー・直接実行は非推奨】
+' 概要 : シェイプがボタン系（フォームコントロール / ActiveX）かどうかを返す
+' 戻値 : True = ボタン系（操作対象外）/ False = 通常図形
+'=============================================================================
+Private Function IsButtonShape(shp As Shape) As Boolean
+
+    IsButtonShape = (shp.Type = msoFormControl Or shp.Type = msoOLEControlObject)
+
+End Function
+
+
+'=============================================================================
 ' Function GetShapeKind  【内部ヘルパー・直接実行は非推奨】
 ' 概要 : シェイプの種別を文字列で返す
 ' 戻値 : "Process" / "Decision" / "StartEnd" / "Arrow" / "Shape"
@@ -790,8 +802,7 @@ Sub RenameShapesSequentially()
     n = 0
     Dim k As Long
     For k = 1 To ws.Shapes.count
-        If ws.Shapes(k).Type <> msoFormControl And _
-           ws.Shapes(k).Type <> msoOLEControlObject Then
+        If Not IsButtonShape(ws.Shapes(k)) Then
             n = n + 1
             ReDim Preserve arr(1 To n)
             Set arr(n) = ws.Shapes(k)
