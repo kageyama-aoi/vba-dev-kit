@@ -750,10 +750,17 @@ End Sub
 
 '=============================================================================
 ' Sub RenameShapesSequentially
-' 概要 : シート上の図形を Top 座標順に "Flow_001" 形式の連番で命名する
+' 概要 : シート上の図形を Top 座標順に "FLOW_{種別}_{通し番号3桁}" 形式で命名する
 ' 備考 : InjectTextFromList の前に実行する
-'         コネクタを含めて連番を振り直す
-'         ボタン（フォームコントロール / ActiveX）は除外する
+'         番号は種別をまたいで通し番号で採番する
+'         ボタン（フォームコントロール / ActiveX）は除外（名前変更しない）
+'
+' 命名ルール：
+'   FLOW_Process_001  … 矩形（処理）
+'   FLOW_Decision_002 … 菱形（判断）
+'   FLOW_StartEnd_003 … 角丸矩形（開始/終了）
+'   FLOW_Arrow_004    … コネクタ（矢印）
+'   FLOW_Shape_005    … その他の図形
 '=============================================================================
 Sub RenameShapesSequentially()
 
@@ -771,6 +778,7 @@ Sub RenameShapesSequentially()
         Exit Sub
     End If
 
+    ' ボタン系を除外して収集
     n = 0
     Dim k As Long
     For k = 1 To ws.Shapes.count
@@ -782,6 +790,7 @@ Sub RenameShapesSequentially()
         End If
     Next k
 
+    ' Top 座標順にソート
     For i = 1 To n - 1
         For j = i + 1 To n
             If arr(i).Top > arr(j).Top Then
@@ -790,8 +799,21 @@ Sub RenameShapesSequentially()
         Next j
     Next i
 
+    ' 種別を判定して通し番号で命名
+    Dim prefix As String
     For i = 1 To n
-        arr(i).Name = "Flow_" & Format(i, "000")
+        If arr(i).Connector Then
+            prefix = "FLOW_Arrow"
+        ElseIf arr(i).AutoShapeType = msoShapeRectangle Then
+            prefix = "FLOW_Process"
+        ElseIf arr(i).AutoShapeType = msoShapeDiamond Then
+            prefix = "FLOW_Decision"
+        ElseIf arr(i).AutoShapeType = msoShapeRoundedRectangle Then
+            prefix = "FLOW_StartEnd"
+        Else
+            prefix = "FLOW_Shape"
+        End If
+        arr(i).Name = prefix & "_" & Format(i, "000")
     Next i
 
     MsgBox n & " 件の図形を連番で命名しました。", vbInformation, "完了"
