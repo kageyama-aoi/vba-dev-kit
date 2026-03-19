@@ -14,7 +14,7 @@ logs/
 *.xls
 
 # ----- ツール固有 -----
-.claude/
+.claude/settings.local.json
 
 # ----- OS / IDE -----
 .DS_Store
