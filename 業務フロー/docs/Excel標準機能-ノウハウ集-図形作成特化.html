@@ -1,0 +1,1476 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Excel 標準機能 図形操作ノウハウ集</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+JP:wght@300;400;500;700&display=swap');
+
+:root {
+  --bg:      #fafaf8;
+  --bg2:     #f3f2ee;
+  --bg3:     #eae9e3;
+  --border:  #d8d6ce;
+  --border2: #c4c2b8;
+  --text:    #1e1e1a;
+  --sub:     #6b6a62;
+  --dim:     #9e9c92;
+
+  --c1:  #1a6bbf;  --c1d: #e8f0fa;  --c1b: #b8d0f0;
+  --c2:  #1a8a4a;  --c2d: #e8f5ed;  --c2b: #a8dfc0;
+  --c3:  #7a3bbf;  --c3d: #f0e8fa;  --c3b: #cca8f0;
+  --c4:  #bf6a1a;  --c4d: #faf0e8;  --c4b: #f0cca8;
+  --c5:  #bf2020;  --c5d: #fae8e8;  --c5b: #f0a8a8;
+  --c6:  #1a9abf;  --c6d: #e8f7fa;  --c6b: #a8dff0;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Noto Sans JP', sans-serif;
+  font-weight: 400;
+  line-height: 1.75;
+  font-size: 14px;
+}
+
+/* ══════════════════ レイアウト ══════════════════ */
+.wrap {
+  display: grid;
+  grid-template-columns: 230px 1fr;
+  min-height: 100vh;
+}
+
+/* ══════════════════ サイドバー ══════════════════ */
+.sb {
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.sb-logo {
+  padding: 22px 18px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sb-eye {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--c1);
+  margin-bottom: 5px;
+}
+
+.sb-title {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.sb-nav { padding: 10px 0 24px; }
+
+.sb-grp {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--dim);
+  padding: 14px 18px 4px;
+}
+
+.sb-a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 18px;
+  font-size: 12.5px;
+  color: var(--sub);
+  text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 0.13s;
+}
+
+.sb-a:hover { color: var(--text); background: var(--bg3); }
+.sb-a.on { color: var(--text); background: var(--bg3); border-left-color: var(--c1); }
+
+.sb-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; opacity: 0.5; }
+.sb-a.on .sb-dot { opacity: 1; }
+
+/* ══════════════════ メイン ══════════════════ */
+.main { padding: 52px 60px 100px; max-width: 860px; }
+
+/* ── ヒーロー ── */
+.hero { margin-bottom: 52px; padding-bottom: 36px; border-bottom: 1px solid var(--border); }
+
+.hero-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--c1);
+  background: var(--c1d);
+  border: 1px solid var(--c1b);
+  padding: 4px 12px;
+  border-radius: 20px;
+  margin-bottom: 18px;
+}
+
+.hero h2 {
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+  margin-bottom: 14px;
+  color: #0a0a08;
+}
+
+.hero-sub {
+  font-size: 14px;
+  color: var(--sub);
+  line-height: 1.85;
+  max-width: 560px;
+}
+
+.hero-rule {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  padding: 10px 14px;
+  background: var(--c1d);
+  border: 1px solid var(--c1b);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--c1);
+  font-weight: 500;
+}
+
+/* ══════════════════ セクション ══════════════════ */
+.sec { margin-bottom: 60px; scroll-margin-top: 28px; }
+
+.sec-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 24px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sec-icon {
+  width: 36px; height: 36px;
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.sec-head-txt h3 { font-size: 17px; font-weight: 700; line-height: 1.3; margin-bottom: 2px; }
+.sec-head-txt p  { font-size: 12.5px; color: var(--sub); }
+
+/* ══════════════════ カード ══════════════════ */
+.card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 14px;
+  overflow: hidden;
+  transition: border-color 0.13s, box-shadow 0.13s;
+}
+
+.card:hover { border-color: var(--border2); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+
+.ch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 18px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s;
+}
+
+.ch:hover { background: var(--bg2); }
+
+.ch-l { display: flex; align-items: center; gap: 10px; font-size: 13.5px; font-weight: 500; }
+
+.tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.t1 { background: var(--c1d); color: var(--c1); border: 1px solid var(--c1b); }
+.t2 { background: var(--c2d); color: var(--c2); border: 1px solid var(--c2b); }
+.t3 { background: var(--c3d); color: var(--c3); border: 1px solid var(--c3b); }
+.t4 { background: var(--c4d); color: var(--c4); border: 1px solid var(--c4b); }
+.t5 { background: var(--c5d); color: var(--c5); border: 1px solid var(--c5b); }
+.t6 { background: var(--c6d); color: var(--c6); border: 1px solid var(--c6b); }
+
+.ch-arr { color: var(--dim); font-size: 11px; transition: transform 0.18s; flex-shrink: 0; }
+.card.open .ch-arr { transform: rotate(180deg); }
+.cb { display: none; }
+.card.open .cb { display: block; }
+
+/* ══════════════════ コンテンツパーツ ══════════════════ */
+
+/* 操作パス表示 */
+.path-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+  padding: 10px 18px;
+  background: var(--bg2);
+  border-top: 1px solid var(--border);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+
+.path-step {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.path-node {
+  background: #fff;
+  border: 1px solid var(--border2);
+  border-radius: 5px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.path-node.hl { background: var(--c1d); border-color: var(--c1b); color: var(--c1); font-weight: 600; }
+.path-node.key { background: var(--bg3); border-color: var(--border2); color: var(--sub); font-size: 11px; }
+
+.path-arrow { color: var(--dim); padding: 0 6px; font-size: 11px; }
+
+/* ショートカットキー表示 */
+.kbd-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+}
+
+.kbd-label { font-size: 12px; color: var(--sub); margin-right: 4px; }
+
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border: 1px solid var(--border2);
+  border-bottom: 2px solid var(--border2);
+  border-radius: 5px;
+  padding: 3px 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  box-shadow: 0 1px 0 var(--border2);
+  line-height: 1.4;
+}
+
+.plus { color: var(--dim); font-size: 12px; }
+.kbd-note { font-size: 11.5px; color: var(--sub); margin-left: 6px; }
+
+/* 説明文 */
+.desc {
+  padding: 13px 18px;
+  font-size: 13px;
+  color: var(--sub);
+  border-top: 1px solid var(--border);
+  line-height: 1.8;
+}
+
+.desc strong { color: var(--text); font-weight: 500; }
+
+code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  background: var(--bg3);
+  padding: 1px 6px;
+  border-radius: 3px;
+  color: var(--c3);
+}
+
+/* コールアウト */
+.callout {
+  display: flex;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  line-height: 1.75;
+  margin: 10px 18px 4px;
+}
+
+.callout.info { background: var(--c1d); border: 1px solid var(--c1b); }
+.callout.ok   { background: var(--c2d); border: 1px solid var(--c2b); }
+.callout.warn { background: var(--c5d); border: 1px solid var(--c5b); }
+.callout.tip  { background: var(--c6d); border: 1px solid var(--c6b); }
+.callout.note { background: var(--c4d); border: 1px solid var(--c4b); }
+.ci { flex-shrink: 0; font-size: 15px; }
+
+/* ステップリスト */
+.steps { list-style: none; padding: 14px 18px; border-top: 1px solid var(--border); }
+.steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 0;
+  font-size: 13px;
+  line-height: 1.7;
+  border-bottom: 1px solid rgba(216,214,206,0.5);
+}
+.steps li:last-child { border-bottom: none; }
+.sn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 22px; height: 22px;
+  border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* テーブル */
+.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.tbl th {
+  background: var(--bg2);
+  padding: 8px 14px;
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+  border-bottom: 1px solid var(--border);
+}
+.tbl td {
+  padding: 9px 14px;
+  border-bottom: 1px solid rgba(216,214,206,0.5);
+  vertical-align: top;
+  line-height: 1.65;
+}
+.tbl tr:last-child td { border-bottom: none; }
+.tbl tr:hover td { background: var(--bg2); }
+
+/* QAT登録ガイド */
+.qat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 16px 18px;
+  border-top: 1px solid var(--border);
+}
+
+.qat-item {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.qat-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  margin-bottom: 5px;
+}
+
+.qat-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  margin-bottom: 3px;
+  color: var(--text);
+}
+
+.qat-why { font-size: 11.5px; color: var(--sub); line-height: 1.55; }
+
+/* スクロールバー */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+@media (max-width: 768px) {
+  .wrap { grid-template-columns: 1fr; }
+  .sb { position: static; height: auto; }
+  .main { padding: 28px 18px 60px; }
+  .qat-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ═══════════ SIDEBAR ═══════════ -->
+<aside class="sb">
+  <div class="sb-logo">
+    <div class="sb-eye">Excel Standard Tips</div>
+    <div class="sb-title">マクロなし<br>Excel標準機能<br>ノウハウ集</div>
+  </div>
+  <nav class="sb-nav">
+
+    <div class="sb-grp">環境設定（最初に一度だけ）</div>
+    <a class="sb-a" href="#qat">
+      <span class="sb-dot" style="background:var(--c1)"></span>
+      クイックアクセスツールバー
+    </a>
+    <a class="sb-a" href="#import">
+      <span class="sb-dot" style="background:var(--c2)"></span>
+      ★ 設定ファイルのインポート
+    </a>
+    <a class="sb-a" href="#snap">
+      <span class="sb-dot" style="background:var(--c1)"></span>
+      グリッドスナップ設定
+    </a>
+
+    <div class="sb-grp">図形の選択</div>
+    <a class="sb-a" href="#obj-select">
+      <span class="sb-dot" style="background:var(--c2)"></span>
+      オブジェクトの選択モード
+    </a>
+    <a class="sb-a" href="#tab-select">
+      <span class="sb-dot" style="background:var(--c2)"></span>
+      Tabキーで図形を順番に選択
+    </a>
+    <a class="sb-a" href="#selection-pane">
+      <span class="sb-dot" style="background:var(--c2)"></span>
+      選択ウィンドウ（オブジェクト一覧）
+    </a>
+
+    <div class="sb-grp">書式の統一</div>
+    <a class="sb-a" href="#brush">
+      <span class="sb-dot" style="background:var(--c3)"></span>
+      書式ブラシの連続適用
+    </a>
+    <a class="sb-a" href="#default-shape">
+      <span class="sb-dot" style="background:var(--c3)"></span>
+      既定の図形スタイルを設定
+    </a>
+    <a class="sb-a" href="#shape-style">
+      <span class="sb-dot" style="background:var(--c3)"></span>
+      図形スタイルの一括適用
+    </a>
+
+    <div class="sb-grp">位置・サイズの整列</div>
+    <a class="sb-a" href="#align-menu">
+      <span class="sb-dot" style="background:var(--c4)"></span>
+      配置メニュー（整列・等間隔）
+    </a>
+    <a class="sb-a" href="#size-panel">
+      <span class="sb-dot" style="background:var(--c4)"></span>
+      サイズと位置の数値入力
+    </a>
+    <a class="sb-a" href="#group">
+      <span class="sb-dot" style="background:var(--c4)"></span>
+      グループ化で一括移動
+    </a>
+
+    <div class="sb-grp">テキスト入力の効率化</div>
+    <a class="sb-a" href="#f2-edit">
+      <span class="sb-dot" style="background:var(--c6)"></span>
+      F2キーで図形テキスト編集
+    </a>
+    <a class="sb-a" href="#tab-next">
+      <span class="sb-dot" style="background:var(--c6)"></span>
+      Tabで次の図形へ移動して編集
+    </a>
+
+  </nav>
+</aside>
+
+<!-- ═══════════ MAIN ═══════════ -->
+<main class="main">
+
+<div class="hero">
+  <div class="hero-chip">📌 Excel Standard Features Only</div>
+  <h2>マクロなし<br>Excel標準機能だけの<br>図形操作ノウハウ集</h2>
+  <p class="hero-sub">VBAマクロを一切使わず、Excelの標準機能・設定・ショートカットだけで業務フロー図形を高速に操作するテクニックをまとめています。</p>
+  <div class="hero-rule">
+    📋 このページに載っているのは「Excel設定・リボン操作・ショートカット」だけです。コードは一切ありません。
+  </div>
+</div>
+
+
+<!-- ════════════════════════════
+     環境設定
+════════════════════════════ -->
+<section class="sec" id="qat">
+  <div class="sec-head">
+    <div class="sec-icon" style="background:#e8f0fa">⚙️</div>
+    <div class="sec-head-txt">
+      <h3>環境設定（最初に一度だけやる）</h3>
+      <p>QATへの登録＋グリッドスナップの2つだけ。設定後は全操作がキーボード中心で完結する。</p>
+    </div>
+  </div>
+
+  <!-- QAT登録：開き方 -->
+  <div class="card open">
+    <div class="ch" onclick="tog(this)">
+      <div class="ch-l"><span class="tag t1">QAT</span>クイックアクセスツールバーの開き方・登録手順</div>
+      <span class="ch-arr">▼</span>
+    </div>
+    <div class="cb">
+
+      <!-- 開き方3パターン -->
+      <div class="desc" style="border-top:none; padding-bottom:6px">
+        <strong>QATの設定画面を開く方法（3パターンのどれでもよい）</strong>
+      </div>
+
+      <div class="path-bar" style="flex-direction:column; align-items:flex-start; gap:8px; padding:10px 18px 14px;">
+
+        <div style="display:flex; align-items:center; gap:0; flex-wrap:wrap">
+          <span style="font-size:11px; color:var(--dim); min-width:56px; font-family:'JetBrains Mono',monospace">方法A</span>
+          <div class="path-step"><span class="path-node">タイトルバー左上の ▼ ボタン（ファイルメニューの上あたり）をクリック</span><span class="path-arrow">›</span></div>
+          <div class="path-step"><span class="path-node hl">その他のコマンド</span></div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:0; flex-wrap:wrap">
+          <span style="font-size:11px; color:var(--dim); min-width:56px; font-family:'JetBrains Mono',monospace">方法B</span>
+          <div class="path-step"><span class="path-node">リボンの何もないところを右クリック</span><span class="path-arrow">›</span></div>
+          <div class="path-step"><span class="path-node hl">クイックアクセスツールバーのユーザー設定</span></div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:0; flex-wrap:wrap">
+          <span style="font-size:11px; color:var(--dim); min-width:56px; font-family:'JetBrains Mono',monospace">方法C</span>
+          <div class="path-step"><span class="path-node">ファイル</span><span class="path-arrow">›</span></div>
+          <div class="path-step"><span class="path-node">オプション</span><span class="path-arrow">›</span></div>
+          <div class="path-step"><span class="path-node hl">クイックアクセスツールバー</span></div>
+        </div>
+
+      </div>
+
+      <!-- 登録手順 -->
+      <ul class="steps">
+        <li>
+          <span class="sn" style="background:var(--c1d);color:var(--c1)">01</span>
+          <span>設定画面が開いたら左上のプルダウン「コマンドの選択」を <strong>「すべてのコマンド」</strong> に変更する<br>
+          <span style="font-size:12px;color:var(--sub);display:block;margin-top:3px">⚠️ ここを「すべてのコマンド」にしないと目的の機能が一覧に出てこないことが多い。これが最重要。</span></span>
+        </li>
+        <li>
+          <span class="sn" style="background:var(--c1d);color:var(--c1)">02</span>
+          <span>左側の一覧から登録したい機能を探す → 選択して <strong>「追加 >>」</strong> ボタンを押す</span>
+        </li>
+        <li>
+          <span class="sn" style="background:var(--c1d);color:var(--c1)">03</span>
+          <span>右側の一覧（登録済み）で <strong>上下ボタン</strong> を使って順番を並び替える<br>
+          <span style="font-size:12px;color:var(--sub);display:block;margin-top:3px">左から1番目が Alt+1、2番目が Alt+2 に対応するので、使用頻度が高い順に並べる</span></span>
+        </li>
+        <li>
+          <span class="sn" style="background:var(--c1d);color:var(--c1)">04</span>
+          <span>OK を押して完了。Excelを再起動しなくても即反映される。</span>
+        </li>
+      </ul>
+
+      <div class="callout tip">
+        <span class="ci">💡</span>
+        <span><strong>登録後は Alt+数字で即起動：</strong>QATの左から1番目が <kbd>Alt</kbd>+<kbd>1</kbd>、2番目が <kbd>Alt</kbd>+<kbd>2</kbd> と自動対応します。Altキーを押すとExcelがQAT上に数字のバッジを表示してくれるので、何番かを覚えなくてもその場で確認できます。</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- QAT登録：各機能の探し方 -->
+  <div class="card open">
+    <div class="ch" onclick="tog(this)">
+      <div class="ch-l"><span class="tag t1">QAT</span>登録すべき6機能 — 「すべてのコマンド」一覧での正確な探し方 ＋ 右クリック最速ルート</div>
+      <span class="ch-arr">▼</span>
+    </div>
+    <div class="cb">
+
+      <div class="callout warn">
+        <span class="ci">⚠️</span>
+        <span><strong>探すときの注意：</strong>「すべてのコマンド」一覧は五十音順（アルファベット順）に並んでいます。似た名前が複数あって迷うことが多いため、下記に正確な表示名と見分け方を記載しています。</span>
+      </div>
+
+      <!-- 機能01 -->
+      <div style="border-top:1px solid var(--border); padding:16px 18px 10px;">
+        <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:8px;">
+          <span style="font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; color:var(--c1); background:var(--c1d); border:1px solid var(--c1b); padding:2px 8px; border-radius:4px; flex-shrink:0">登録 01</span>
+          <span style="font-size:14px; font-weight:700; color:var(--text)">オブジェクトの選択</span>
+          <span style="font-size:12px; color:var(--sub)">図形をドラッグ範囲選択するモード</span>
+        </div>
+        <table class="tbl">
+          <tr><th style="width:120px">一覧での表示名</th><td><strong>オブジェクトの選択</strong></td></tr>
+          <tr><th>探し方</th><td>「お」で始まる行をスクロール。「オブジェクト」で始まる項目が複数あるが、そのまま「オブジェクトの選択」を探す</td></tr>
+          <tr><th>見分け方</th><td>矢印カーソルのアイコン。「オブジェクトの選択と表示」（選択ウィンドウを開く機能）と間違えやすいので注意</td></tr>
+          <tr><th>見つからない場合</th><td>「ホーム」タブ → 「検索と選択 ▼」→「オブジェクトの選択」を右クリック →「クイックアクセスツールバーに追加」でも登録できる</td></tr>
+        </table>
+      </div>
+
+      <!-- 機能02 -->
+      <div style="border-top:1px solid var(--border); padding:16px 18px 10px;">
+        <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:8px;">
+          <span style="font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; color:var(--c1); background:var(--c1d); border:1px solid var(--c1b); padding:2px 8px; border-radius:4px; flex-shrink:0">登録 02</span>
+          <span style="font-size:14px; font-weight:700; color:var(--text)">書式のコピー/貼り付け</span>
+          <span style="font-size:12px; color:var(--sub)">書式ブラシ</span>
+        </div>
+        <table class="tbl">
+          <tr><th style="width:120px">一覧での表示名</th><td><strong>書式のコピー/貼り付け</strong></td></tr>
+          <tr><th>探し方</th><td>「し」の行。「書式」で始まる項目は多いが「書式のコピー/貼り付け」はほぼ先頭付近にある</td></tr>
+          <tr><th>見分け方</th><td>ブラシのアイコン。「書式設定」「書式の○○」などと間違えないよう「コピー/貼り付け」という文字列を探す</td></tr>
+          <tr><th>見つからない場合</th><td>「ホーム」タブ → クリップボードグループのブラシアイコンを右クリック →「クイックアクセスツールバーに追加」</td></tr>
+        </table>
+      </div>
+
+      <!-- 機能03 -->
+      <div style="border-top:1px solid var(--border); padding:16px 18px 10px;">
+        <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:8px;">
+          <span style="font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; color:var(--c1); background:var(--c1d); border:1px solid var(--c1b); padding:2px 8px; border-radius:4px; flex-shrink:0">登録 03</span>
+          <span style="font-size:14px; font-weight:700; color:var(--text)">上下に整列</span>
+          <span style="font-size:12px; color:var(--sub)">縦方向の等間隔整列</span>
+        </div>
+        <table class="tbl">
+          <tr><th style="width:120px">一覧での表示名</th><td><strong>上下に整列</strong></td></tr>
+          <tr><th>探し方</th><td>「う」の行。「上下に整列」はそのままの名前で出てくる</td></tr>
+          <tr><th>見分け方</th><td>縦に3本の線が等間隔に並んだアイコン。「上揃え」「上下中央揃え」と混同しないこと。「整列」という単語があるものを選ぶ</td></tr>
+          <tr><th>見つからない場合</th><td>図形を選択した状態で「図形の書式」タブ →「配置」→「上下に整列」を右クリック →「クイックアクセスツールバーに追加」</td></tr>
+        </table>
+      </div>
+
+      <!-- 機能04 -->
+      <div style="border-top:1px solid var(--border); padding:16px 18px 10px;">
+        <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:8px;">
+          <span style="font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; color:var(--c1); background:var(--c1d); border:1px solid var(--c1b); padding:2px 8px; border-radius:4px; flex-shrink:0">登録 04</span>
+          <span style="font-size:14px; font-weight:700; color:var(--text)">左右に整列</span>
+          <span style="font-size:12px; color:var(--sub)">横方向の等間隔整列</span>
+        </div>
+        <table class="tbl">
+          <tr><th style="width:120px">一覧での表示名</th><td><strong>左右に整列</strong></td></tr>
+          <tr><th>探し方</th><td>「さ」の行。「左右に整列」はそのままの名前で出てくる</td></tr>
+          <tr><th>見分け方</th><td>横に3本の線が等間隔に並んだアイコン。「左揃え」「左右中央揃え」と混同しないこと</td></tr>
+          <tr><th>見つからない場合</th><td>図形を選択した状態で「図形の書式」タブ →「配置」→「左右に整列」を右クリック →「クイックアクセスツールバーに追加」</td></tr>
+        </table>
+      </div>
+
+      <!-- 機能05 -->
+      <div style="border-top:1px solid var(--border); padding:16px 18px 10px;">
+        <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:8px;">
+          <span style="font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; color:var(--c1); background:var(--c1d); border:1px solid var(--c1b); padding:2px 8px; border-radius:4px; flex-shrink:0">登録 05</span>
+          <span style="font-size:14px; font-weight:700; color:var(--text)">オブジェクトの選択と表示</span>
+          <span style="font-size:12px; color:var(--sub)">選択ウィンドウ（図形の一覧パネル）</span>
+        </div>
+        <table class="tbl">
+          <tr><th style="width:120px">一覧での表示名</th><td><strong>オブジェクトの選択と表示</strong></td></tr>
+          <tr><th>探し方</th><td>「お」の行。「オブジェクトの選択」（登録01）の少し下にある。「と表示」まで含む名前を選ぶ</td></tr>
+          <tr><th>見分け方</th><td>レイヤーパネルのようなアイコン。「オブジェクトの選択」（矢印のみ）と混同しやすい。必ず「と表示」が付いている方を選ぶ</td></tr>
+          <tr><th>見つからない場合</th><td>「ホーム」タブ →「検索と選択 ▼」→「オブジェクトの選択と表示」を右クリック →「クイックアクセスツールバーに追加」</td></tr>
+        </table>
+      </div>
+
+      <!-- 機能06 -->
+      <div style="border-top:1px solid var(--border); padding:16px 18px 14px;">
+        <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:8px;">
+          <span style="font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; color:var(--c1); background:var(--c1d); border:1px solid var(--c1b); padding:2px 8px; border-radius:4px; flex-shrink:0">登録 06</span>
+          <span style="font-size:14px; font-weight:700; color:var(--text)">グループ化 / グループ解除</span>
+          <span style="font-size:12px; color:var(--sub)">スイムレーン単位でまとめて移動</span>
+        </div>
+        <table class="tbl">
+          <tr><th style="width:120px">一覧での表示名</th><td><strong>グループ化</strong> と <strong>グループ解除</strong> は別々のコマンドとして存在する。両方登録推奨</td></tr>
+          <tr><th>探し方</th><td>「く」の行に「グループ化」「グループ解除」が並んでいる</td></tr>
+          <tr><th>見分け方</th><td>複数の図形が1つにまとまるアイコン（グループ化）と、分離するアイコン（グループ解除）。名前がそのままなので迷いにくい</td></tr>
+          <tr><th>見つからない場合</th><td>図形を複数選択した状態で「図形の書式」タブ →「配置」→「グループ化」を右クリック →「クイックアクセスツールバーに追加」</td></tr>
+        </table>
+      </div>
+
+      <div class="callout ok">
+        <span class="ci">✅</span>
+        <span><strong>リボンから直接右クリック登録が最速：</strong>「すべてのコマンド」一覧で探すより、リボン上に表示されている機能を右クリックして「クイックアクセスツールバーに追加」する方が確実で速いです。まず機能を使う状況（図形を選択するなど）を作ってからリボンに機能を出し、そこから右クリックするのが最短ルートです。</span>
+      </div>
+
+      <!-- 右クリック最速登録ルート早見表 -->
+      <div style="padding:14px 18px 16px; border-top:1px solid var(--border)">
+        <div style="font-size:12px; font-weight:700; color:var(--text); margin-bottom:12px">📌 右クリック最速登録ルート早見表（一覧検索より確実）</div>
+        <table class="tbl">
+          <tr>
+            <th style="width:170px">登録したい機能</th>
+            <th>リボン上での場所（右クリックできる状態にするための操作）</th>
+          </tr>
+          <tr>
+            <td><strong>オブジェクトの選択</strong></td>
+            <td>「ホーム」タブ → 右端「編集」グループ → 「検索と選択 ▼」→ 「オブジェクトの選択」を右クリック</td>
+          </tr>
+          <tr>
+            <td><strong>書式のコピー/貼り付け</strong></td>
+            <td>「ホーム」タブ → 左端「クリップボード」グループ → ブラシアイコンを右クリック</td>
+          </tr>
+          <tr>
+            <td><strong>上下に整列</strong></td>
+            <td>図形を選択 → 「図形の書式」タブ → 「配置」グループ → 「配置 ▼」→「上下に整列」を右クリック</td>
+          </tr>
+          <tr>
+            <td><strong>左右に整列</strong></td>
+            <td>図形を選択 → 「図形の書式」タブ → 「配置」グループ → 「配置 ▼」→「左右に整列」を右クリック</td>
+          </tr>
+          <tr>
+            <td><strong>オブジェクトの選択と表示</strong></td>
+            <td>「ホーム」タブ → 右端「編集」グループ → 「検索と選択 ▼」→「オブジェクトの選択と表示」を右クリック</td>
+          </tr>
+          <tr>
+            <td><strong>グループ化</strong></td>
+            <td>図形を複数選択 → 「図形の書式」タブ → 「配置」グループ → 「グループ化 ▼」→「グループ化」を右クリック</td>
+          </tr>
+        </table>
+        <div class="callout tip" style="margin:10px 0 0">
+          <span class="ci">💡</span>
+          <span>「図形の書式」タブは図形を選択したときだけ現れる<strong>コンテキストタブ</strong>です。図形を選択していない状態ではリボンに表示されません。登録作業の前にまずシート上の図形を1つクリックしておくことが前提です。</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- インポート裏ワザ -->
+  <div class="card open" id="import">
+    <div class="ch" onclick="tog(this)">
+      <div class="ch-l">
+        <span class="tag t1">裏ワザ</span>
+        設定ファイルのインポート — 30秒で全員同じQAT環境になる
+        <span style="font-family:'JetBrains Mono',monospace; font-size:9.5px; background:#e8f5ed; color:#1a8a4a; border:1px solid #a8dfc0; padding:2px 8px; border-radius:4px; margin-left:4px">NEW</span>
+      </div>
+      <span class="ch-arr">▼</span>
+    </div>
+    <div class="cb">
+
+      <div class="callout ok">
+        <span class="ci">✅</span>
+        <span><strong>何がうれしいか：</strong>手動でQATを設定すると6機能を1個ずつ探して登録するのに5〜10分かかります。設定ファイル（.exportedUI）を配布してインポートするだけで、チーム全員が30秒で同じ環境になります。PCを新しくしたときの再セットアップにも使えます。</span>
+      </div>
+
+      <!-- インポート手順 -->
+      <div class="desc" style="padding-bottom:4px"><strong>インポート手順</strong></div>
+      <ul class="steps">
+        <li>
+          <span class="sn" style="background:var(--c1d);color:var(--c1)">01</span>
+          <span>「ファイル」タブ → 「オプション」→「クイックアクセスツールバー」を開く</span>
+        </li>
+        <li>
+          <span class="sn" style="background:var(--c1d);color:var(--c1)">02</span>
+          <span>画面右下の <strong>「インポート/エクスポート ▼」</strong> をクリック → <strong>「カスタマイズ ファイルのインポート」</strong> を選択</span>
+        </li>
+        <li>
+          <span class="sn" style="background:var(--c1d);color:var(--c1)">03</span>
+          <span><code>.exportedUI</code> ファイルを選択して「開く」→ 確認ダイアログが出るので「はい」</span>
+        </li>
+        <li>
+          <span class="sn" style="background:var(--c1d);color:var(--c1)">04</span>
+          <span>OK を押して閉じる → QATに即反映される（Excelの再起動不要）</span>
+        </li>
+      </ul>
+
+      <div class="callout warn">
+        <span class="ci">⚠️</span>
+        <span><strong>インポートすると既存のQAT設定はすべて上書きされます。</strong>現在の設定を残したい場合は先にエクスポートしてバックアップしておきましょう。エクスポートは同じ「インポート/エクスポート ▼」→「すべてのカスタマイズをエクスポート」から行えます。</span>
+      </div>
+
+      <!-- 登録済み内容の一覧 -->
+      <div style="padding:14px 18px 4px; border-top:1px solid var(--border)">
+        <div style="font-size:12px; font-weight:700; color:var(--text); margin-bottom:10px">📋 このファイルに含まれるQAT登録内容（確認済み）</div>
+      </div>
+
+      <table class="tbl" style="border-top:none">
+        <tr>
+          <th style="width:40px">位置</th>
+          <th style="width:220px">機能名</th>
+          <th>用途</th>
+          <th style="width:70px">図形用途</th>
+        </tr>
+        <tr>
+          <td style="font-family:'JetBrains Mono',monospace; color:var(--dim)">1</td>
+          <td>自動保存</td>
+          <td>OneDrive/SharePoint利用時の自動保存切り替え</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td style="font-family:'JetBrains Mono',monospace; color:var(--dim)">2</td>
+          <td>上書き保存</td>
+          <td>Ctrl+S と同じ</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td style="font-family:'JetBrains Mono',monospace; color:var(--dim)">3</td>
+          <td>元に戻す</td>
+          <td>Ctrl+Z と同じ</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td style="font-family:'JetBrains Mono',monospace; color:var(--dim)">4</td>
+          <td>やり直し</td>
+          <td>Ctrl+Y と同じ</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td style="font-family:'JetBrains Mono',monospace; color:var(--dim)">5</td>
+          <td>罫線</td>
+          <td>セルへの罫線設定ギャラリー</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td style="font-family:'JetBrains Mono',monospace; color:var(--dim)">6</td>
+          <td>ウィンドウ枠の固定</td>
+          <td>行・列の固定ギャラリー</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td style="font-family:'JetBrains Mono',monospace; color:var(--dim)">7</td>
+          <td>太字</td>
+          <td>Ctrl+B と同じ</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td style="font-family:'JetBrains Mono',monospace; color:var(--dim)">8</td>
+          <td>セルの塗りつぶし</td>
+          <td>セル背景色のカラーピッカー</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td style="font-family:'JetBrains Mono',monospace; color:var(--dim)">9</td>
+          <td>フォントの色</td>
+          <td>文字色のカラーピッカー</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td style="font-family:'JetBrains Mono',monospace; color:var(--dim)">10</td>
+          <td>図形の挿入</td>
+          <td>図形種別ギャラリー（クリックで図形一覧が開く）</td>
+          <td style="color:var(--c2); font-weight:500">✅ 図形</td>
+        </tr>
+        <tr>
+          <td style="font-family:'JetBrains Mono',monospace; color:var(--dim)">11</td>
+          <td>中央揃え</td>
+          <td>セル・図形テキストの横中央揃え</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td style="font-family:'JetBrains Mono',monospace; font-weight:700">12</td>
+          <td><strong>オブジェクトの選択</strong></td>
+          <td>ドラッグで範囲選択モードに切り替え</td>
+          <td style="color:var(--c2); font-weight:500">✅ 図形</td>
+        </tr>
+        <tr>
+          <td style="font-family:'JetBrains Mono',monospace; font-weight:700">13</td>
+          <td><strong>上下に整列</strong></td>
+          <td>選択図形を縦方向に等間隔で整列</td>
+          <td style="color:var(--c2); font-weight:500">✅ 図形</td>
+        </tr>
+        <tr>
+          <td style="font-family:'JetBrains Mono',monospace; font-weight:700">14</td>
+          <td><strong>左右中央揃え</strong></td>
+          <td>選択図形の横中心を揃える</td>
+          <td style="color:var(--c2); font-weight:500">✅ 図形</td>
+        </tr>
+        <tr>
+          <td style="font-family:'JetBrains Mono',monospace; font-weight:700">15</td>
+          <td><strong>書式のコピー/貼り付け</strong></td>
+          <td>書式ブラシ。ダブルクリックで連続適用</td>
+          <td style="color:var(--c2); font-weight:500">✅ 図形</td>
+        </tr>
+        <tr>
+          <td style="font-family:'JetBrains Mono',monospace; font-weight:700">16</td>
+          <td><strong>グループ化</strong></td>
+          <td>複数図形をまとめて1つとして扱う</td>
+          <td style="color:var(--c2); font-weight:500">✅ 図形</td>
+        </tr>
+        <tr>
+          <td style="font-family:'JetBrains Mono',monospace; font-weight:700">17</td>
+          <td><strong>グループ解除</strong></td>
+          <td>グループを個別図形に戻す</td>
+          <td style="color:var(--c2); font-weight:500">✅ 図形</td>
+        </tr>
+      </table>
+
+      <div class="callout tip" style="margin:10px 18px 14px">
+        <span class="ci">💡</span>
+        <span><strong>エクスポートして自分専用ファイルを作る：</strong>「インポート/エクスポート ▼」→「すべてのカスタマイズをエクスポート」で現在の設定を <code>.exportedUI</code> ファイルとして保存できます。設定を変えるたびに保存しておけば、PCの移行・再セットアップ時にも30秒で元通りになります。</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- グリッドスナップ -->
+  <div class="card" id="snap">
+    <div class="ch" onclick="tog(this)">
+      <div class="ch-l"><span class="tag t1">設定</span>グリッドにスナップ — 図形が自動でセル境界に吸着する</div>
+      <span class="ch-arr">▼</span>
+    </div>
+    <div class="cb">
+      <div class="path-bar">
+        <div class="path-step">
+          <span class="path-node">図形を選択した状態で</span>
+          <span class="path-arrow">›</span>
+        </div>
+        <div class="path-step">
+          <span class="path-node">図形の書式タブ</span>
+          <span class="path-arrow">›</span>
+        </div>
+        <div class="path-step">
+          <span class="path-node">配置グループ</span>
+          <span class="path-arrow">›</span>
+        </div>
+        <div class="path-step">
+          <span class="path-node hl">配置 ▼ → グリッドの設定</span>
+        </div>
+      </div>
+
+      <div class="desc">
+        <strong>「グリッドにスナップ」をON</strong>にすると、図形をドラッグしたときにセルの境界線に自動で吸着します。手動での微調整が不要になり、図形の位置が自然に揃います。<br><br>
+        <strong>「図形にスナップ」もON</strong>にすると、他の図形の端にも吸着するようになります。複数の図形を並べるとき、上端・左端がピタッと揃います。<br><br>
+        <strong>一時的にスナップを無効にしたいとき</strong>は、ドラッグ中に <kbd>Alt</kbd> キーを押し続けると、その間だけスナップが外れてピクセル単位で自由に移動できます。
+      </div>
+    </div>
+  </div>
+
+</section>
+
+
+<!-- ════════════════════════════
+     図形の選択
+════════════════════════════ -->
+<section class="sec" id="obj-select">
+  <div class="sec-head">
+    <div class="sec-icon" style="background:#e8f5ed">🎯</div>
+    <div class="sec-head-txt">
+      <h3>図形の選択</h3>
+      <p>Ctrl+A の「全部取れてしまう問題」を回避する方法たち</p>
+    </div>
+  </div>
+
+  <!-- オブジェクトの選択モード -->
+  <div class="card open">
+    <div class="ch" onclick="tog(this)">
+      <div class="ch-l"><span class="tag t2">選択</span>オブジェクトの選択モード — ドラッグで範囲選択</div>
+      <span class="ch-arr">▼</span>
+    </div>
+    <div class="cb">
+      <div class="path-bar">
+        <div class="path-step">
+          <span class="path-node">ホームタブ</span>
+          <span class="path-arrow">›</span>
+        </div>
+        <div class="path-step">
+          <span class="path-node">編集グループ</span>
+          <span class="path-arrow">›</span>
+        </div>
+        <div class="path-step">
+          <span class="path-node">検索と選択 ▼</span>
+          <span class="path-arrow">›</span>
+        </div>
+        <div class="path-step">
+          <span class="path-node hl">オブジェクトの選択</span>
+        </div>
+      </div>
+
+      <div class="kbd-row">
+        <span class="kbd-label">QAT登録後：</span>
+        <kbd>Alt</kbd><span class="plus">+</span><kbd>1</kbd>
+        <span class="kbd-note">（QATの何番目に登録したかによって数字が変わります）</span>
+      </div>
+
+      <table class="tbl" style="border-top:1px solid var(--border)">
+        <tr><th>モード</th><th>カーソルの見た目</th><th>操作</th><th>使いどころ</th></tr>
+        <tr>
+          <td>通常モード</td>
+          <td>白い十字（セル選択）</td>
+          <td>クリック → セルが選択される</td>
+          <td>テキスト入力・数式</td>
+        </tr>
+        <tr>
+          <td>オブジェクト選択モード</td>
+          <td>矢印カーソル</td>
+          <td>ドラッグ → 範囲内の図形だけ選択</td>
+          <td>図形を複数まとめて選ぶとき ✅</td>
+        </tr>
+      </table>
+
+      <div class="callout warn">
+        <span class="ci">⚠️</span>
+        <span><strong>Ctrl+A との違い：</strong>Ctrl+A はシート上のすべての図形（ヘッダー帯・仕切り線含む）を選択します。オブジェクト選択モードでドラッグすると、ドラッグした矩形の内側にある図形だけが選択されます。スイムレーン本体だけを選びたいときはこちらを使います。</span>
+      </div>
+
+      <div class="callout ok">
+        <span class="ci">✅</span>
+        <span><strong>終了方法：</strong>Escキーを押すか、もう一度「オブジェクトの選択」をクリックすると通常モードに戻ります。QATに登録しておくと ON/OFF が1クリックで切り替えられます。</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabキー選択 -->
+  <div class="card" id="tab-select">
+    <div class="ch" onclick="tog(this)">
+      <div class="ch-l"><span class="tag t2">選択</span>Tabキーで図形を1個ずつ順番に選択する</div>
+      <span class="ch-arr">▼</span>
+    </div>
+    <div class="cb">
+      <div class="kbd-row">
+        <kbd>Tab</kbd>
+        <span class="kbd-note">→ 次の図形へ移動（シート上の図形を順番に選択）</span>
+      </div>
+      <div class="kbd-row" style="border-top:none;padding-top:0">
+        <kbd>Shift</kbd><span class="plus">+</span><kbd>Tab</kbd>
+        <span class="kbd-note">→ 前の図形へ移動</span>
+      </div>
+
+      <div class="desc">
+        <strong>コネクタ（矢印線）だけを選びたいとき</strong>に特に有効です。コネクタはクリックで選ぼうとしても図形の裏に隠れていて選びにくいのですが、Tabキーで順番に巡回すると確実に選択できます。<br><br>
+        <strong>使い方：</strong>まずシート上の何か図形を1つクリックし、そこからTabで次々と移動します。目的の図形が選択されたところで操作（書式変更・テキスト編集など）を行います。
+      </div>
+
+      <div class="callout tip">
+        <span class="ci">💡</span>
+        <span>Tabキーでの選択はコネクタ・図形・テキストボックスを区別なく順番に巡回します。図形の追加順（シートに配置した順）で移動するので、後から追加したものは後の方に出てきます。</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 選択ウィンドウ -->
+  <div class="card" id="selection-pane">
+    <div class="ch" onclick="tog(this)">
+      <div class="ch-l"><span class="tag t2">選択</span>選択ウィンドウ — シート上の全図形を一覧で管理</div>
+      <span class="ch-arr">▼</span>
+    </div>
+    <div class="cb">
+      <div class="path-bar">
+        <div class="path-step">
+          <span class="path-node">図形を選択した状態で</span>
+          <span class="path-arrow">›</span>
+        </div>
+        <div class="path-step">
+          <span class="path-node">図形の書式タブ</span>
+          <span class="path-arrow">›</span>
+        </div>
+        <div class="path-step">
+          <span class="path-node">配置グループ</span>
+          <span class="path-arrow">›</span>
+        </div>
+        <div class="path-step">
+          <span class="path-node hl">選択ウィンドウ</span>
+        </div>
+      </div>
+
+      <table class="tbl" style="border-top:1px solid var(--border)">
+        <tr><th>できること</th><th>操作</th></tr>
+        <tr><td>図形名をその場でリネーム</td><td>一覧の名前をダブルクリック → 直接入力</td></tr>
+        <tr><td>特定の図形を選択</td><td>一覧の行をクリック → シート上でその図形が選択される</td></tr>
+        <tr><td>図形を一時的に非表示</td><td>行右端の 👁 アイコンをクリック（印刷には影響しない）</td></tr>
+        <tr><td>重なり順の変更</td><td>行をドラッグで上下に並び替え（上が前面）</td></tr>
+      </table>
+
+      <div class="callout info">
+        <span class="ci">💡</span>
+        <span><strong>図形名の変更について：</strong>選択ウィンドウでリネームした名前は、VBAの <code>ws.Shapes("名前")</code> で参照するときにそのまま使えます。管理しやすい名前（例: <code>処理_申込確認</code>）に変えておくとマクロとの連携もスムーズになります。</span>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+
+<!-- ════════════════════════════
+     書式の統一
+════════════════════════════ -->
+<section class="sec" id="brush">
+  <div class="sec-head">
+    <div class="sec-icon" style="background:#f0e8fa">🎨</div>
+    <div class="sec-head-txt">
+      <h3>書式の統一</h3>
+      <p>コードなしで書式を揃える3つのアプローチ</p>
+    </div>
+  </div>
+
+  <!-- 書式ブラシ -->
+  <div class="card open">
+    <div class="ch" onclick="tog(this)">
+      <div class="ch-l"><span class="tag t3">書式</span>書式ブラシ（連続適用） — ダブルクリックで複数図形に連続転写</div>
+      <span class="ch-arr">▼</span>
+    </div>
+    <div class="cb">
+      <div class="path-bar">
+        <div class="path-step">
+          <span class="path-node">ホームタブ</span>
+          <span class="path-arrow">›</span>
+        </div>
+        <div class="path-step">
+          <span class="path-node">クリップボードグループ</span>
+          <span class="path-arrow">›</span>
+        </div>
+        <div class="path-step">
+          <span class="path-node hl">書式のコピー/貼り付け（ブラシアイコン）</span>
+        </div>
+      </div>
+
+      <ul class="steps">
+        <li>
+          <span class="sn" style="background:var(--c3d);color:var(--c3)">01</span>
+          <span>コピー元にしたい図形を <strong>シングルクリック</strong> で選択する（ここはシングルで良い）</span>
+        </li>
+        <li>
+          <span class="sn" style="background:var(--c3d);color:var(--c3)">02</span>
+          <span>ブラシアイコンを <strong>ダブルクリック</strong> → カーソルがブラシ型に変わったら連続モード開始</span>
+        </li>
+        <li>
+          <span class="sn" style="background:var(--c3d);color:var(--c3)">03</span>
+          <span>書式を貼り付けたい図形を次々と <strong>クリック</strong> していく（シート内のどこにある図形でも可）</span>
+        </li>
+        <li>
+          <span class="sn" style="background:var(--c3d);color:var(--c3)">04</span>
+          <span><kbd>Esc</kbd> を押して終了 → 通常カーソルに戻る</span>
+        </li>
+      </ul>
+
+      <table class="tbl" style="border-top:1px solid var(--border)">
+        <tr><th>クリック回数</th><th>挙動</th><th>使いどころ</th></tr>
+        <tr><td>1回クリック</td><td>1図形に貼り付けて自動終了</td><td>1個だけ揃えたいとき</td></tr>
+        <tr><td>ダブルクリック</td><td>Escまで連続貼り付け</td><td>複数図形をまとめて揃えるとき ✅</td></tr>
+      </table>
+
+      <div class="callout warn">
+        <span class="ci">⚠️</span>
+        <span><strong>コピーされるのは「書式だけ」です。</strong>フォント・色・サイズ・枠線が揃います。テキスト内容はコピーされません。コネクタ（矢印線）にも適用でき、線色・太さ・矢印スタイルが揃います。</span>
+      </div>
+
+      <div class="callout tip">
+        <span class="ci">💡</span>
+        <span>空白セルをクリックしても連続モードは終了しません。意図せず適用することはないので、図形を探しながら落ち着いてクリックできます。</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 既定の図形スタイル -->
+  <div class="card" id="default-shape">
+    <div class="ch" onclick="tog(this)">
+      <div class="ch-l"><span class="tag t3">書式</span>既定の図形スタイルを設定 — 新しく置く図形が最初から統一される</div>
+      <span class="ch-arr">▼</span>
+    </div>
+    <div class="cb">
+      <ul class="steps">
+        <li>
+          <span class="sn" style="background:var(--c3d);color:var(--c3)">01</span>
+          <span>見た目を基準にしたい図形（フォント・色・枠線が設定済みのもの）を右クリック</span>
+        </li>
+        <li>
+          <span class="sn" style="background:var(--c3d);color:var(--c3)">02</span>
+          <span>コンテキストメニューから <strong>「既定の図形に設定」</strong> を選ぶ</span>
+        </li>
+        <li>
+          <span class="sn" style="background:var(--c3d);color:var(--c3)">03</span>
+          <span>以降、そのシートに新しく図形を挿入すると最初からその書式で作成される</span>
+        </li>
+      </ul>
+
+      <div class="callout ok">
+        <span class="ci">✅</span>
+        <span><strong>これが最も根本的な解決策です。</strong>「新しく置くたびに書式が崩れる」原因は、Excelが最後に設定した書式を記憶していないためです。既定スタイルを設定しておくと、置いた直後から書式が揃った状態で始まります。フロー作成の最初にこの設定をするだけで、書式の後追い修正がほぼ不要になります。</span>
+      </div>
+
+      <div class="desc">
+        <strong>適用範囲：</strong>この設定はブック単位で記憶されます。同じブックを開き直しても設定は保持されます。ただし別のブックには引き継がれないため、新しいブックで作業を始めるときに毎回設定します。
+      </div>
+    </div>
+  </div>
+
+  <!-- 図形スタイルの一括適用 -->
+  <div class="card" id="shape-style">
+    <div class="ch" onclick="tog(this)">
+      <div class="ch-l"><span class="tag t3">書式</span>図形スタイルギャラリー — 複数選択して一発適用</div>
+      <span class="ch-arr">▼</span>
+    </div>
+    <div class="cb">
+      <div class="path-bar">
+        <div class="path-step">
+          <span class="path-node">複数図形を選択した状態で</span>
+          <span class="path-arrow">›</span>
+        </div>
+        <div class="path-step">
+          <span class="path-node">図形の書式タブ</span>
+          <span class="path-arrow">›</span>
+        </div>
+        <div class="path-step">
+          <span class="path-node hl">図形のスタイル（ギャラリー）</span>
+        </div>
+      </div>
+
+      <div class="desc">
+        複数の図形を選択した状態でスタイルギャラリーをクリックすると、選択中のすべての図形に一括で適用されます。<br><br>
+        <strong>用途：</strong>Excelプリセットのスタイルで統一したい場合に使います。塗りなし・黒枠のシンプルなスタイルは「スタイルなし、輪郭のみ」などから選べます。プリセットにない細かい書式はその後に個別調整します。
+      </div>
+    </div>
+  </div>
+
+</section>
+
+
+<!-- ════════════════════════════
+     位置・サイズの整列
+════════════════════════════ -->
+<section class="sec" id="align-menu">
+  <div class="sec-head">
+    <div class="sec-icon" style="background:#faf0e8">📐</div>
+    <div class="sec-head-txt">
+      <h3>位置・サイズの整列</h3>
+      <p>マウスでの試行錯誤をゼロにする整列機能</p>
+    </div>
+  </div>
+
+  <!-- 配置メニュー -->
+  <div class="card open">
+    <div class="ch" onclick="tog(this)">
+      <div class="ch-l"><span class="tag t4">整列</span>配置メニュー — 揃え・等間隔のすべてがここにある</div>
+      <span class="ch-arr">▼</span>
+    </div>
+    <div class="cb">
+      <div class="path-bar">
+        <div class="path-step">
+          <span class="path-node">複数図形を選択した状態で</span>
+          <span class="path-arrow">›</span>
+        </div>
+        <div class="path-step">
+          <span class="path-node">図形の書式タブ</span>
+          <span class="path-arrow">›</span>
+        </div>
+        <div class="path-step">
+          <span class="path-node">配置グループ</span>
+          <span class="path-arrow">›</span>
+        </div>
+        <div class="path-step">
+          <span class="path-node hl">配置 ▼</span>
+        </div>
+      </div>
+
+      <table class="tbl" style="border-top:1px solid var(--border)">
+        <tr><th>メニュー項目</th><th>効果</th><th>よく使う場面</th></tr>
+        <tr><td>左揃え</td><td>全図形の左端を先頭図形に揃える</td><td>縦一列に並べるとき</td></tr>
+        <tr><td>左右中央揃え</td><td>全図形の横中心を揃える</td><td>縦フローの整列</td></tr>
+        <tr><td>上揃え</td><td>全図形の上端を先頭図形に揃える</td><td>横一列に並べるとき</td></tr>
+        <tr><td>上下中央揃え</td><td>全図形の縦中心を揃える</td><td>横フローの整列</td></tr>
+        <tr><td>上下に整列</td><td>図形間の縦の間隔を等間隔にする</td><td>縦フローの間隔を揃える ✅</td></tr>
+        <tr><td>左右に整列</td><td>図形間の横の間隔を等間隔にする</td><td>横フローの間隔を揃える ✅</td></tr>
+      </table>
+
+      <div class="callout info">
+        <span class="ci">💡</span>
+        <span><strong>「選択した図形に合わせる」と「シートに合わせる」の切り替え：</strong>配置メニューの一番上に「選択した図形を揃える」「シートに合わせて配置する」があります。通常は「選択した図形を揃える」にしておきます。</span>
+      </div>
+
+      <div class="callout ok">
+        <span class="ci">✅</span>
+        <span><strong>黄金コンボ：</strong>縦フローなら「<strong>左右中央揃え</strong>」→「<strong>上下に整列</strong>」の順で実行。横フローなら「<strong>上下中央揃え</strong>」→「<strong>左右に整列</strong>」の順で実行。2クリックで完璧に整列します。QATに登録しておくと <kbd>Alt</kbd>+数字で完結します。</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- サイズと位置 -->
+  <div class="card" id="size-panel">
+    <div class="ch" onclick="tog(this)">
+      <div class="ch-l"><span class="tag t4">整列</span>サイズと位置の数値入力 — ミリ単位で正確に揃える</div>
+      <span class="ch-arr">▼</span>
+    </div>
+    <div class="cb">
+      <div class="kbd-row">
+        <kbd>F4</kbd>
+        <span class="kbd-note">または</span>
+        <kbd>Ctrl</kbd><span class="plus">+</span><kbd>1</kbd>
+        <span class="kbd-note">→ 図形を選択した状態で押すと「図形の書式設定」パネルが開く</span>
+      </div>
+
+      <div class="path-bar" style="border-top:none">
+        <div class="path-step">
+          <span class="path-node">図形を右クリック</span>
+          <span class="path-arrow">›</span>
+        </div>
+        <div class="path-step">
+          <span class="path-node hl">図形の書式設定</span>
+          <span class="path-arrow">›</span>
+        </div>
+        <div class="path-step">
+          <span class="path-node">「サイズとプロパティ」タブ（□アイコン）</span>
+        </div>
+      </div>
+
+      <div class="desc">
+        <strong>高さ・幅・位置をcm単位で直接入力できます。</strong>例えば「すべての処理図形を幅2.5cm・高さ1.2cmに統一する」場合、1つを設定してから残りに書式ブラシで転写、もしくは複数選択してまとめて入力します。<br><br>
+        <strong>複数選択時の注意：</strong>複数の図形を選択した状態でサイズを入力すると、すべての図形が同じサイズになります。ただし位置（左・上）の入力は最初の図形を基準に相対移動する場合があるため、位置の一括変更は配置メニューを使う方が安全です。
+      </div>
+    </div>
+  </div>
+
+  <!-- グループ化 -->
+  <div class="card" id="group">
+    <div class="ch" onclick="tog(this)">
+      <div class="ch-l"><span class="tag t4">整列</span>グループ化 — スイムレーン単位でまとめて移動・コピー</div>
+      <span class="ch-arr">▼</span>
+    </div>
+    <div class="cb">
+      <div class="kbd-row">
+        <kbd>Ctrl</kbd><span class="plus">+</span><kbd>G</kbd>
+        <span class="kbd-note">→ グループ化（複数図形を選択した状態で）</span>
+      </div>
+      <div class="kbd-row" style="border-top:none;padding-top:0">
+        <kbd>Ctrl</kbd><span class="plus">+</span><kbd>Shift</kbd><span class="plus">+</span><kbd>G</kbd>
+        <span class="kbd-note">→ グループ解除</span>
+      </div>
+
+      <ul class="steps">
+        <li>
+          <span class="sn" style="background:var(--c4d);color:var(--c4)">01</span>
+          <span>オブジェクト選択モードで1スイムレーン分の図形をドラッグ選択</span>
+        </li>
+        <li>
+          <span class="sn" style="background:var(--c4d);color:var(--c4)">02</span>
+          <span>Ctrl+G でグループ化 → レーン全体が1つの図形として扱われる</span>
+        </li>
+        <li>
+          <span class="sn" style="background:var(--c4d);color:var(--c4)">03</span>
+          <span>グループのまま移動・コピー・位置調整が可能</span>
+        </li>
+        <li>
+          <span class="sn" style="background:var(--c4d);color:var(--c4)">04</span>
+          <span>グループ内の個別図形を編集したい場合は <strong>グループをダブルクリック</strong> → 内部の個別図形をクリック</span>
+        </li>
+      </ul>
+
+      <div class="callout tip">
+        <span class="ci">💡</span>
+        <span><strong>グループのネストも可能：</strong>スイムレーン1本をグループ化したものを、さらに複数まとめてグループ化できます。「列Aのグループ」「列Bのグループ」をまとめて「フロー全体グループ」にすることで、フロー全体の移動が1回の操作でできます。</span>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+
+<!-- ════════════════════════════
+     テキスト入力の効率化
+════════════════════════════ -->
+<section class="sec" id="f2-edit">
+  <div class="sec-head">
+    <div class="sec-icon" style="background:#e8f7fa">⌨️</div>
+    <div class="sec-head-txt">
+      <h3>テキスト入力の効率化</h3>
+      <p>ダブルクリックより速いキーボードだけの入力フロー</p>
+    </div>
+  </div>
+
+  <!-- F2キー -->
+  <div class="card open">
+    <div class="ch" onclick="tog(this)">
+      <div class="ch-l"><span class="tag t6">入力</span>F2キーで図形のテキスト編集モードに入る</div>
+      <span class="ch-arr">▼</span>
+    </div>
+    <div class="cb">
+      <div class="kbd-row">
+        <span class="kbd-label">図形を選択した状態で：</span>
+        <kbd>F2</kbd>
+        <span class="kbd-note">→ テキスト編集モードに入る（ダブルクリックと同じ効果）</span>
+      </div>
+      <div class="kbd-row" style="border-top:none;padding-top:0">
+        <kbd>Esc</kbd>
+        <span class="kbd-note">→ テキスト編集を終了して図形選択状態に戻る</span>
+      </div>
+      <div class="kbd-row" style="border-top:none;padding-top:0">
+        <kbd>Esc</kbd><span class="plus"> もう一度</span>
+        <span class="kbd-note">→ 図形の選択も解除してシートに戻る</span>
+      </div>
+
+      <div class="desc">
+        <strong>マウスを使わずに図形のテキストを編集する流れ：</strong><br>
+        Tabキーで目的の図形を選択 → F2でテキスト編集モード → テキストを入力 → Escで編集終了 → Tabで次の図形へ移動 → 繰り返す。<br><br>
+        この流れをマスターするとマウスをほぼ使わずにテキスト入力が完了します。
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab+F2の連続フロー -->
+  <div class="card" id="tab-next">
+    <div class="ch" onclick="tog(this)">
+      <div class="ch-l"><span class="tag t6">入力</span>Tab → F2 の連続フロー — キーボードだけで全図形を入力する</div>
+      <span class="ch-arr">▼</span>
+    </div>
+    <div class="cb">
+      <ul class="steps">
+        <li>
+          <span class="sn" style="background:var(--c6d);color:var(--c6)">01</span>
+          <span>最初の図形を1回クリックして選択する（最初だけマウスを使う）</span>
+        </li>
+        <li>
+          <span class="sn" style="background:var(--c6d);color:var(--c6)">02</span>
+          <span><kbd>F2</kbd> → テキスト編集モードに入る</span>
+        </li>
+        <li>
+          <span class="sn" style="background:var(--c6d);color:var(--c6)">03</span>
+          <span>テキストを入力する</span>
+        </li>
+        <li>
+          <span class="sn" style="background:var(--c6d);color:var(--c6)">04</span>
+          <span><kbd>Esc</kbd> → 編集終了（図形が選択された状態のまま）</span>
+        </li>
+        <li>
+          <span class="sn" style="background:var(--c6d);color:var(--c6)">05</span>
+          <span><kbd>Tab</kbd> → 次の図形に移動</span>
+        </li>
+        <li>
+          <span class="sn" style="background:var(--c6d);color:var(--c6)">06</span>
+          <span>02〜05を繰り返す</span>
+        </li>
+      </ul>
+
+      <div class="callout ok">
+        <span class="ci">✅</span>
+        <span>最初のクリック以外はすべてキーボードで完結します。図形のダブルクリックが不要になるため、手がマウスとキーボードを行き来する動作がなくなり体感速度が大きく上がります。</span>
+      </div>
+
+      <div class="callout tip">
+        <span class="ci">💡</span>
+        <span><strong>テキスト入力中の改行：</strong>図形のテキスト編集中に <kbd>Enter</kbd> を押すと改行されます（セルの確定ではなく改行）。図形から抜け出したいときは <kbd>Esc</kbd> を使います。</span>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+</main>
+</div>
+
+<script>
+function tog(h) { h.parentElement.classList.toggle('open'); }
+
+const links = document.querySelectorAll('.sb-a');
+const io = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      const id = e.target.id;
+      links.forEach(l => l.classList.toggle('on', l.getAttribute('href') === '#' + id));
+    }
+  });
+}, { rootMargin: '-15% 0px -75% 0px' });
+
+document.querySelectorAll('[id]').forEach(el => io.observe(el));
+</script>
+</body>
+</html>
