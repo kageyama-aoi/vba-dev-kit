@@ -227,37 +227,25 @@ End Sub
 '=============================================================================
 Sub FlowStyle(shp As Shape, txt As String)
 
-    Debug.Print "FlowStyle開始 shp.Name=" & shp.Name & " Connector=" & shp.Connector
     If shp.Connector Then Exit Sub
 
     With shp
-        Debug.Print "Fill"
         .Fill.ForeColor.RGB = RGB(FILL_R, FILL_G, FILL_B)
 
-        Debug.Print "Line"
         .Line.ForeColor.RGB = RGB(BORDER_R, BORDER_G, BORDER_B)
         .Line.Weight = BORDER_WEIGHT
 
         With .TextFrame2
-            Debug.Print "Font.Name"
             .TextRange.Font.Name = FONT_NAME
-            Debug.Print "Font.NameFarEast"
             .TextRange.Font.NameFarEast = FONT_NAME
-            Debug.Print "Font.NameAscii"
             .TextRange.Font.NameAscii = FONT_NAME
-            Debug.Print "Font.Size"
             .TextRange.Font.Size = FONT_SIZE
-            Debug.Print "VerticalAnchor"
             .VerticalAnchor = msoAnchorMiddle
-            Debug.Print "Alignment"
             .TextRange.ParagraphFormat.Alignment = msoAlignCenter
-            Debug.Print "Text"
             .TextRange.Text = txt
         End With
 
     End With
-
-    Debug.Print "FlowStyle終了"
 
 End Sub
 
@@ -727,15 +715,9 @@ Sub InjectTextFromList()
         shpName = Trim(wsDef.Cells(i, 1).Value)
         txt = Trim(wsDef.Cells(i, 2).Value)
 
-        ' 動作確認用
-        Debug.Print "i=" & i & " shpName=[" & shpName & "] txt=[" & txt & "]"
-
         On Error Resume Next
         Set shp = ws.Shapes(shpName)
         On Error GoTo 0
-
-        ' 動作確認用
-        Debug.Print "shp Is Nothing: " & (shp Is Nothing)
 
         If Not shp Is Nothing Then
             Call FlowStyle(shp, txt)
