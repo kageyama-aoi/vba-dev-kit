@@ -1,0 +1,791 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "ThisWorkbook"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+'=============================================================================
+' モジュール名  : FlowMacro
+' 作成目的      : Excelシート上に業務フロー図形・コネクタを作成するマクロ集
+'
+' 【前提】
+'   このマクロは「マクロを直接埋め込めない業務フロー用Excelブック」に対して
+'   外部の呼び出し元ブックからボタン等を通じて操作することを想定しています。
+'   呼び出し元ブックにボタンを配置し、そこから各マクロを呼び出してください。
+'
+' 【ActiveSheet について】──────────────────────────
+'   外部ブックからマクロを呼び出す場合、ActiveSheet が呼び出し元ブックの
+'   シートを指してしまい「システムエラー &H80004005」が発生することがあります。
+'
+'   このモジュールでは GetTargetSheet という共通ヘルパーで操作対象シートを
+'   一元管理しています。対象シートの解決ロジックはそこだけを変更してください。
+'
+'   【現在の解決ロジック（GetTargetSheet 内）】
+'     1. 開いているブックの中から TARGET_BOOK_KEYWORD を名前に含むものを探す
+'        （ThisWorkbook 自身は除外。同一ファイル運用時はフォールバックへ）
+'     2. 見つかったブックが 1 件 → そのブックを使用
+'        見つかったブックが複数 → InputBox でユーザーに選ばせる
+'        見つからない → ThisWorkbook をフォールバックとして使用
+'     3. sheetName 引数が指定されていればそのシートを返す
+'        省略時は ActiveSheet を返す
+'
+'   ブック名の判定キーワードは定数 TARGET_BOOK_KEYWORD で変更できます。
+'   図形シートのシート名は定数 FLOW_SHEET_NAME で変更できます。
+'
+' 【収録マクロ一覧】─────────────────────────────
+'
+'  ＜図形配置＞
+'   Flow_Process              … 「処理」図形（矩形）を選択セル位置に配置
+'   Flow_Decision             … 「判断」図形（菱形）を選択セル位置に配置
+'   Flow_StartEnd             … 「開始／終了」図形（角丸矩形）を選択セル位置に配置
+'
+'  ＜スタイル＞
+'   FlowStyle                 … 図形の共通スタイル（塗り・枠線・フォント）を適用
+'
+'  ＜接続＞
+'   ConnectSelectedShapes_Auto          … 選択した 2 図形を位置関係で自動接続
+'   ConnectMultipleShapes_TopToBottom   … 選択した複数図形を上→下順に連続接続
+'   ConnectMultipleShapes_LeftToRight   … 選択した複数図形を左→右順に連続接続
+'
+'  ＜補助ユーティリティ＞
+'   SetParagraphAndFont       … 選択図形のフォント・段落書式を一括設定
+'   SelectShapesInColumnRange … InputBox で指定した列範囲内の図形を一括選択
+'   ToggleConnectorType       … コネクタの線種（直線 ⇔ エルボ）を切り替え
+'   InjectTextFromList        … 定義シートのリストから図形にテキストを一括注入
+'   RenameShapesSequentially  … シート上の図形を Top 順に連番命名する
+'
+'  ＜内部ヘルパー（直接実行は非推奨）＞
+'   GetTargetSheet              … 操作対象シートを解決して返す（ActiveSheet問題の対策）
+'   GetSelectedShapes           … 選択図形を検証して Shape 配列に格納
+'   ConnectTwoShapes_Vertical   … 2 図形を上→下方向で接続
+'   ConnectTwoShapes_Horizontal … 2 図形を左→右方向で接続
+'
+' 【使い方（基本フロー）】─────────────────────────
+'   1. 図形を配置したいセルをクリックして選択する
+'   2. 配置マクロを実行（Flow_Process / Flow_Decision / Flow_StartEnd）
+'      → 選択セルの位置に図形が作成される
+'   3. 接続したい 2 図形を Ctrl+クリックで選択する
+'   4. ConnectSelectedShapes_Auto を実行
+'      → 位置関係（縦 or 横）を自動判定して矢印を引く
+'
+' 【複数図形を一括接続する場合】──────────────────────
+'   ・縦に並んでいる場合 → ConnectMultipleShapes_TopToBottom
+'   ・横に並んでいる場合 → ConnectMultipleShapes_LeftToRight
+'
+' 【定数について】────────────────────────────────
+'   モジュール冒頭の「■ 設定定数」セクションで図形サイズ・色・フォントを
+'   一括管理しています。デザイン変更はここだけを編集してください。
+'
+' 【変更履歴】────────────────────────────────────
+'   v1.0  初版作成
+'   v2.0  定数化・エラー処理・コメント整備
+'   v3.0  図形追加（判断・開始終了）/ 横並び接続マクロ追加
+'   v4.0  コメント・ドキュメント整備 / SelectShapesInColumnRange をInputBox対応に変更
+'   v4.1  外部ブック呼び出し時の ActiveSheet 問題に対応（GetTargetSheet 導入）
+'   v4.2  GetTargetSheet に sheetName 引数追加 / 複数ブック誤爆問題を修正
+'=============================================================================
+
+Option Explicit
+
+
+'=============================================================================
+' ■ 設定定数（デザイン変更はここを編集する）
+'=============================================================================
+
+' --- 操作対象ブックの判定キーワード ---
+Private Const TARGET_BOOK_KEYWORD As String = "業務フロー"
+
+' --- 図形を配置するシートの名前 ---
+'     このシートが図形配置・接続の対象になる
+Private Const FLOW_SHEET_NAME As String = "Sheet1"
+
+' --- 定義シートの名前 ---
+'     InjectTextFromList が参照する図形名・テキストの対応表シート
+Private Const DEF_SHEET_NAME As String = "フロー定義"
+
+' --- 処理・判断図形サイズ（センチメートル）---
+Private Const SHAPE_WIDTH_CM  As Double = 2.5
+Private Const SHAPE_HEIGHT_CM As Double = 1.2
+
+' --- 開始／終了図形サイズ（センチメートル）---
+Private Const SE_WIDTH_CM  As Double = 2.5
+Private Const SE_HEIGHT_CM As Double = 0.8
+
+' --- 図形の塗り色（RGB）---
+Private Const FILL_R As Long = 255
+Private Const FILL_G As Long = 255
+Private Const FILL_B As Long = 255
+
+' --- 枠線の色（RGB）---
+Private Const BORDER_R As Long = 0
+Private Const BORDER_G As Long = 0
+Private Const BORDER_B As Long = 0
+
+' --- 枠線の太さ（ポイント）---
+Private Const BORDER_WEIGHT As Single = 0.75
+
+' --- フォント設定 ---
+Private Const FONT_NAME As String = "Meiryo UI"
+Private Const FONT_SIZE As Single = 9
+
+' --- コネクタ（矢印）の色と太さ ---
+Private Const CONN_R      As Long = 0
+Private Const CONN_G      As Long = 0
+Private Const CONN_B      As Long = 0
+Private Const CONN_WEIGHT As Single = 1
+
+
+'=============================================================================
+' ■ 接続ポイント番号の定数
+'   上=1 / 右=2 / 下=3 / 左=4
+'=============================================================================
+Private Const CP_TOP    As Long = 1
+Private Const CP_RIGHT  As Long = 2
+Private Const CP_BOTTOM As Long = 3
+Private Const CP_LEFT   As Long = 4
+
+
+'=============================================================================
+' Sub Flow_Process
+'=============================================================================
+Sub Flow_Process()
+
+    Dim ws  As Worksheet
+    Dim shp As Shape
+
+    Set ws = GetTargetSheet(FLOW_SHEET_NAME)
+    If ws Is Nothing Then Exit Sub
+
+    Set shp = ws.Shapes.AddShape( _
+        msoShapeRectangle, _
+        Selection.Left, _
+        Selection.Top, _
+        Application.CentimetersToPoints(SHAPE_WIDTH_CM), _
+        Application.CentimetersToPoints(SHAPE_HEIGHT_CM))
+
+    Call FlowStyle(shp, "処理")
+
+End Sub
+
+
+'=============================================================================
+' Sub Flow_Decision
+'=============================================================================
+Sub Flow_Decision()
+
+    Dim ws  As Worksheet
+    Dim shp As Shape
+
+    Set ws = GetTargetSheet(FLOW_SHEET_NAME)
+    If ws Is Nothing Then Exit Sub
+
+    Set shp = ws.Shapes.AddShape( _
+        msoShapeDiamond, _
+        Selection.Left, _
+        Selection.Top, _
+        Application.CentimetersToPoints(SHAPE_WIDTH_CM), _
+        Application.CentimetersToPoints(SHAPE_HEIGHT_CM))
+
+    Call FlowStyle(shp, "判断")
+
+End Sub
+
+
+'=============================================================================
+' Sub Flow_StartEnd
+'=============================================================================
+Sub Flow_StartEnd()
+
+    Dim ws  As Worksheet
+    Dim shp As Shape
+
+    Set ws = GetTargetSheet(FLOW_SHEET_NAME)
+    If ws Is Nothing Then Exit Sub
+
+    Set shp = ws.Shapes.AddShape( _
+        msoShapeRoundedRectangle, _
+        Selection.Left, _
+        Selection.Top, _
+        Application.CentimetersToPoints(SE_WIDTH_CM), _
+        Application.CentimetersToPoints(SE_HEIGHT_CM))
+
+    Call FlowStyle(shp, "開始")
+
+End Sub
+
+
+'=============================================================================
+' Sub FlowStyle
+'=============================================================================
+Sub FlowStyle(shp As Shape, txt As String)
+
+    Debug.Print "FlowStyle開始 shp.Name=" & shp.Name & " Connector=" & shp.Connector
+    If shp.Connector Then Exit Sub
+
+    With shp
+        Debug.Print "Fill"
+        .Fill.ForeColor.RGB = RGB(FILL_R, FILL_G, FILL_B)
+
+        Debug.Print "Line"
+        .Line.ForeColor.RGB = RGB(BORDER_R, BORDER_G, BORDER_B)
+        .Line.Weight = BORDER_WEIGHT
+
+        With .TextFrame2
+            Debug.Print "Font.Name"
+            .TextRange.Font.Name = FONT_NAME
+            Debug.Print "Font.NameFarEast"
+            .TextRange.Font.NameFarEast = FONT_NAME
+            Debug.Print "Font.NameAscii"
+            .TextRange.Font.NameAscii = FONT_NAME
+            Debug.Print "Font.Size"
+            .TextRange.Font.Size = FONT_SIZE
+            Debug.Print "VerticalAnchor"
+            .VerticalAnchor = msoAnchorMiddle
+            Debug.Print "Alignment"
+            .TextRange.ParagraphFormat.Alignment = msoAlignCenter
+            Debug.Print "Text"
+            .TextRange.Text = txt
+        End With
+
+    End With
+
+    Debug.Print "FlowStyle完了"
+
+End Sub
+
+
+'=============================================================================
+' Sub ConnectSelectedShapes_Auto
+'=============================================================================
+Sub ConnectSelectedShapes_Auto()
+
+    If TypeName(Selection) <> "DrawingObjects" Then
+        MsgBox "図形を選択してから実行してください。", vbExclamation, "選択エラー"
+        Exit Sub
+    End If
+
+    If Selection.ShapeRange.count <> 2 Then
+        MsgBox "図形を 2 つだけ選択してください。", vbExclamation, "選択エラー"
+        Exit Sub
+    End If
+
+    Dim shp1 As Shape
+    Dim shp2 As Shape
+    Set shp1 = Selection.ShapeRange(1)
+    Set shp2 = Selection.ShapeRange(2)
+
+    Dim cx1 As Double, cy1 As Double
+    Dim cx2 As Double, cy2 As Double
+
+    cx1 = shp1.Left + shp1.Width / 2
+    cy1 = shp1.Top + shp1.Height / 2
+    cx2 = shp2.Left + shp2.Width / 2
+    cy2 = shp2.Top + shp2.Height / 2
+
+    Dim dx As Double
+    Dim dy As Double
+    dx = cx1 - cx2
+    dy = cy1 - cy2
+
+    If Abs(dx) > Abs(dy) Then
+        If dx < 0 Then
+            Call ConnectTwoShapes_Horizontal(shp1, shp2)
+        Else
+            Call ConnectTwoShapes_Horizontal(shp2, shp1)
+        End If
+    Else
+        If dy < 0 Then
+            Call ConnectTwoShapes_Vertical(shp1, shp2)
+        Else
+            Call ConnectTwoShapes_Vertical(shp2, shp1)
+        End If
+    End If
+
+End Sub
+
+
+'=============================================================================
+' Sub ConnectMultipleShapes_TopToBottom
+'=============================================================================
+Sub ConnectMultipleShapes_TopToBottom()
+
+    Dim arr() As Shape
+    Dim n     As Long
+
+    If Not GetSelectedShapes(arr, n) Then Exit Sub
+
+    Dim i   As Long
+    Dim j   As Long
+    Dim tmp As Shape
+
+    For i = 1 To n - 1
+        For j = i + 1 To n
+            If arr(i).Top > arr(j).Top Then
+                Set tmp = arr(i)
+                Set arr(i) = arr(j)
+                Set arr(j) = tmp
+            End If
+        Next j
+    Next i
+
+    For i = 1 To n - 1
+        Call ConnectTwoShapes_Vertical(arr(i), arr(i + 1))
+    Next i
+
+End Sub
+
+
+'=============================================================================
+' Sub ConnectMultipleShapes_LeftToRight
+'=============================================================================
+Sub ConnectMultipleShapes_LeftToRight()
+
+    Dim arr() As Shape
+    Dim n     As Long
+
+    If Not GetSelectedShapes(arr, n) Then Exit Sub
+
+    Dim i   As Long
+    Dim j   As Long
+    Dim tmp As Shape
+
+    For i = 1 To n - 1
+        For j = i + 1 To n
+            If arr(i).Left > arr(j).Left Then
+                Set tmp = arr(i)
+                Set arr(i) = arr(j)
+                Set arr(j) = tmp
+            End If
+        Next j
+    Next i
+
+    For i = 1 To n - 1
+        Call ConnectTwoShapes_Horizontal(arr(i), arr(i + 1))
+    Next i
+
+End Sub
+
+
+'=============================================================================
+'
+'  ■■■ 内部ヘルパー（直接実行は非推奨） ■■■
+'
+'=============================================================================
+
+'=============================================================================
+' Function GetTargetSheet  ［内部ヘルパー・直接実行は非推奨］
+' 概要 : 操作対象の Worksheet を解決して返す
+'
+' 引数 : sheetName … 取得したいシート名（省略時は ActiveSheet を返す）
+' 戻値 : Worksheet オブジェクト（解決失敗時は Nothing を返しメッセージを表示）
+'
+' 解決ロジック:
+'   1. TARGET_BOOK_KEYWORD を名前に含むブックを収集（ThisWorkbook は除外）
+'   2. 0件 → ThisWorkbook をフォールバック
+'      1件 → そのブックを使用
+'      複数 → InputBox でユーザーに選ばせる
+'   3. sheetName 指定あり → 該当シートを返す（なければエラーメッセージ）
+'      sheetName 省略    → ActiveSheet を返す
+'=============================================================================
+Private Function GetTargetSheet(Optional sheetName As String = "") As Worksheet
+
+    Dim wb         As Workbook
+    Dim matched()  As Workbook
+    Dim matchCount As Long
+    Dim targetWb   As Workbook
+
+    matchCount = 0
+
+    ' --- TARGET_BOOK_KEYWORD を名前に含むブックを収集（ThisWorkbook は除外）---
+    For Each wb In Application.Workbooks
+        If InStr(wb.Name, TARGET_BOOK_KEYWORD) > 0 Then
+            If wb.Name <> ThisWorkbook.Name Then
+                matchCount = matchCount + 1
+                ReDim Preserve matched(1 To matchCount)
+                Set matched(matchCount) = wb
+            End If
+        End If
+    Next wb
+
+    ' --- ヒット数でターゲットブックを決定 ---
+    Select Case matchCount
+
+        Case 0
+            ' 外部ブックなし → 同一ファイル運用とみなして ThisWorkbook を使用
+            Set targetWb = ThisWorkbook
+
+        Case 1
+            Set targetWb = matched(1)
+
+        Case Else
+            ' 複数ヒット → ユーザーに選ばせる
+            Dim i       As Long
+            Dim choices As String
+            choices = "対象ブックを番号で選んでください:" & vbCrLf
+            For i = 1 To matchCount
+                choices = choices & i & ": " & matched(i).Name & vbCrLf
+            Next i
+
+            Dim ans As String
+            ans = InputBox(choices, "対象ブックの選択", "1")
+            If ans = "" Then
+                Set GetTargetSheet = Nothing
+                Exit Function
+            End If
+
+            Dim idx As Long
+            idx = CLng(ans)
+            If idx < 1 Or idx > matchCount Then
+                MsgBox "無効な番号です。", vbExclamation, "入力エラー"
+                Set GetTargetSheet = Nothing
+                Exit Function
+            End If
+
+            Set targetWb = matched(idx)
+
+    End Select
+
+    ' --- シート名指定の有無で返すシートを決定 ---
+    If sheetName <> "" Then
+        On Error GoTo ErrNoSheet
+        Set GetTargetSheet = targetWb.Worksheets(sheetName)
+        On Error GoTo 0
+    Else
+        Set GetTargetSheet = targetWb.ActiveSheet
+    End If
+
+    Exit Function
+
+ErrNoSheet:
+    MsgBox "シート「" & sheetName & "」が見つかりません。" & vbCrLf & _
+           "定数 FLOW_SHEET_NAME / DEF_SHEET_NAME を確認してください。", _
+           vbExclamation, "シート取得エラー"
+    Set GetTargetSheet = Nothing
+
+End Function
+
+
+'=============================================================================
+' Function GetSelectedShapes  ［内部ヘルパー・直接実行は非推奨］
+'=============================================================================
+Private Function GetSelectedShapes(arr() As Shape, n As Long) As Boolean
+
+    GetSelectedShapes = False
+
+    If TypeName(Selection) <> "DrawingObjects" Then
+        MsgBox "図形を選択してから実行してください。", vbExclamation, "選択エラー"
+        Exit Function
+    End If
+
+    n = Selection.ShapeRange.count
+
+    If n < 2 Then
+        MsgBox "2 つ以上の図形を選択してください。", vbExclamation, "選択エラー"
+        Exit Function
+    End If
+
+    ReDim arr(1 To n)
+
+    Dim i As Long
+    For i = 1 To n
+        Set arr(i) = Selection.ShapeRange(i)
+    Next i
+
+    GetSelectedShapes = True
+
+End Function
+
+
+'=============================================================================
+' Sub ConnectTwoShapes_Vertical  ［内部ヘルパー・直接実行は非推奨］
+'=============================================================================
+Private Sub ConnectTwoShapes_Vertical(shp1 As Shape, shp2 As Shape)
+
+    Dim ws   As Worksheet
+    Dim conn As Shape
+
+    Set ws = GetTargetSheet(FLOW_SHEET_NAME)
+    If ws Is Nothing Then Exit Sub
+
+    Set conn = ws.Shapes.AddConnector(msoConnectorStraight, 0, 0, 0, 0)
+
+    With conn
+        .Line.ForeColor.RGB = RGB(CONN_R, CONN_G, CONN_B)
+        .Line.Weight = CONN_WEIGHT
+        .Line.EndArrowheadStyle = msoArrowheadTriangle
+
+        .ConnectorFormat.BeginConnect shp1, CP_BOTTOM
+        .ConnectorFormat.EndConnect shp2, CP_TOP
+
+        .RerouteConnections
+    End With
+
+End Sub
+
+
+'=============================================================================
+' Sub ConnectTwoShapes_Horizontal  ［内部ヘルパー・直接実行は非推奨］
+'=============================================================================
+Private Sub ConnectTwoShapes_Horizontal(shp1 As Shape, shp2 As Shape)
+
+    Dim ws   As Worksheet
+    Dim conn As Shape
+
+    Set ws = GetTargetSheet(FLOW_SHEET_NAME)
+    If ws Is Nothing Then Exit Sub
+
+    Set conn = ws.Shapes.AddConnector(msoConnectorStraight, 0, 0, 0, 0)
+
+    With conn
+        .Line.ForeColor.RGB = RGB(CONN_R, CONN_G, CONN_B)
+        .Line.Weight = CONN_WEIGHT
+        .Line.EndArrowheadStyle = msoArrowheadTriangle
+
+        .ConnectorFormat.BeginConnect shp1, CP_RIGHT
+        .ConnectorFormat.EndConnect shp2, CP_LEFT
+
+        .RerouteConnections
+    End With
+
+End Sub
+
+
+'=============================================================================
+'
+'  ■■■ 補助ユーティリティ ■■■
+'
+'=============================================================================
+
+'=============================================================================
+' Sub SetParagraphAndFont
+'=============================================================================
+Sub SetParagraphAndFont()
+
+    Dim shp As Shape
+
+    If TypeName(Selection) <> "DrawingObjects" Then
+        MsgBox "図形を選択してください", vbExclamation, "選択エラー"
+        Exit Sub
+    End If
+
+    For Each shp In Selection.ShapeRange
+
+        If shp.TextFrame2.HasText Then
+
+            With shp.TextFrame2.TextRange.ParagraphFormat
+                .Alignment = msoAlignCenter
+                .SpaceWithin = 12
+                .FirstLineIndent = 0
+                .LeftIndent = 0
+                .RightIndent = 0
+            End With
+
+            With shp.TextFrame2.TextRange.Font
+                .Name = "メイリオ"
+                .Size = 9
+            End With
+
+        End If
+
+    Next shp
+
+End Sub
+
+
+'=============================================================================
+' Sub SelectShapesInColumnRange
+'=============================================================================
+Sub SelectShapesInColumnRange()
+
+    Dim ws As Worksheet
+    Set ws = GetTargetSheet(FLOW_SHEET_NAME)
+    If ws Is Nothing Then Exit Sub
+
+    Dim inputStart As String
+    Dim inputEnd   As String
+
+    inputStart = InputBox("開始列を入力してください（例: B, BG）", "列範囲の指定（開始）", "BG")
+    If inputStart = "" Then Exit Sub
+
+    inputEnd = InputBox("終了列を入力してください（例: F, BN）", "列範囲の指定（終了）", "BN")
+    If inputEnd = "" Then Exit Sub
+
+    Dim startCol As Double
+    Dim endCol   As Double
+
+    On Error GoTo ErrInvalidColumn
+    startCol = ws.Columns(inputStart).Left
+    endCol = ws.Columns(inputEnd).Left + ws.Columns(inputEnd).Width
+    On Error GoTo 0
+
+    Dim shp        As Shape
+    Dim shpNames() As String
+    Dim count      As Long
+
+    count = 0
+
+    For Each shp In ws.Shapes
+        If shp.Left >= startCol And shp.Left <= endCol Then
+            count = count + 1
+            ReDim Preserve shpNames(1 To count)
+            shpNames(count) = shp.Name
+        End If
+    Next shp
+
+    If count > 0 Then
+        ws.Shapes.Range(shpNames).Select
+    Else
+        MsgBox "対象図形なし", vbInformation, "結果"
+    End If
+
+    Exit Sub
+
+ErrInvalidColumn:
+    MsgBox "列名が正しくありません。アルファベットで入力してください（例: B, BG）", _
+           vbExclamation, "入力エラー"
+
+End Sub
+
+
+'=============================================================================
+' Sub ToggleConnectorType
+'=============================================================================
+Sub ToggleConnectorType()
+
+    Dim shp As Shape
+
+    If TypeName(Selection) <> "DrawingObjects" Then
+        MsgBox "図形を選択してください", vbExclamation, "選択エラー"
+        Exit Sub
+    End If
+
+    For Each shp In Selection.ShapeRange
+
+        If shp.Connector Then
+
+            Select Case shp.ConnectorFormat.Type
+
+                Case msoConnectorStraight
+                    shp.ConnectorFormat.Type = msoConnectorElbow
+
+                Case msoConnectorElbow
+                    shp.ConnectorFormat.Type = msoConnectorStraight
+
+                Case msoConnectorCurve
+                    shp.ConnectorFormat.Type = msoConnectorStraight
+
+            End Select
+
+        End If
+
+    Next shp
+
+End Sub
+
+
+'=============================================================================
+' Sub InjectTextFromList
+' 概要 : 定義シートのリストを読み、図形名に対応するテキストと書式を一括適用する
+'
+' 定義シート（DEF_SHEET_NAME）の形式：
+'   1行目 … ヘッダー行（読み飛ばされる）
+'   A列   … 図形の名前（例: Flow_001）
+'   B列   … 注入するテキスト
+'
+' 備考 : 図形名は RenameShapesSequentially で事前に付与しておく
+'         テキストを注入すると同時に FlowStyle も呼んで書式統一
+'=============================================================================
+Sub InjectTextFromList()
+
+    Dim wsDef    As Worksheet
+    Dim ws       As Worksheet
+    Dim shp      As Shape
+    Dim i        As Long
+    Dim shpName  As String
+    Dim txt      As String
+    Dim hitCount As Long
+
+    Set wsDef = GetTargetSheet(DEF_SHEET_NAME)
+    If wsDef Is Nothing Then Exit Sub
+
+    Set ws = GetTargetSheet(FLOW_SHEET_NAME)
+    If ws Is Nothing Then Exit Sub
+
+    hitCount = 0
+    i = 2   ' 1行目はヘッダーとして読み飛ばす
+
+    Do While wsDef.Cells(i, 1).Value <> ""
+
+        shpName = Trim(wsDef.Cells(i, 1).Value)
+        txt = Trim(wsDef.Cells(i, 2).Value)
+        
+        ' ★確認用
+        Debug.Print "i=" & i & " shpName=[" & shpName & "] txt=[" & txt & "]"
+
+        On Error Resume Next
+        Set shp = ws.Shapes(shpName)
+        On Error GoTo 0
+
+        ' ★確認用
+        Debug.Print "shp Is Nothing: " & (shp Is Nothing)
+
+        If Not shp Is Nothing Then
+            Call FlowStyle(shp, txt)
+            hitCount = hitCount + 1
+            Set shp = Nothing
+        End If
+
+        i = i + 1
+    Loop
+
+    MsgBox hitCount & " 個の図形にテキストと書式を適用しました。", _
+           vbInformation, "完了"
+
+End Sub
+
+
+'=============================================================================
+' Sub RenameShapesSequentially
+' 概要 : シート上の図形を Top 座標順に "Flow_001"～の連番で命名し直す
+' 備考 : InjectTextFromList の前に実行する
+'         コネクタも含めて連番が振られる
+'=============================================================================
+Sub RenameShapesSequentially()
+
+    Dim ws  As Worksheet
+    Dim arr() As Shape
+    Dim n   As Long
+    Dim i   As Long, j As Long
+    Dim tmp As Shape
+
+    Set ws = GetTargetSheet(FLOW_SHEET_NAME)
+    If ws Is Nothing Then Exit Sub
+
+    n = ws.Shapes.count
+    If n = 0 Then
+        MsgBox "図形がありません", vbInformation
+        Exit Sub
+    End If
+
+    ReDim arr(1 To n)
+    For i = 1 To n: Set arr(i) = ws.Shapes(i): Next i
+
+    For i = 1 To n - 1
+        For j = i + 1 To n
+            If arr(i).Top > arr(j).Top Then
+                Set tmp = arr(i): Set arr(i) = arr(j): Set arr(j) = tmp
+            End If
+        Next j
+    Next i
+
+    For i = 1 To n
+        arr(i).Name = "Flow_" & Format(i, "000")
+    Next i
+
+    MsgBox n & " 個の図形を連番で命名しました。", vbInformation, "完了"
+
+End Sub
+

@@ -1,0 +1,22 @@
+# ----- 依存パッケージ -----
+/node_modules
+/xvba_modules
+
+# ----- ログ -----
+logs/
+
+# ----- バックアップ -----
+/xvba_excel_backup
+
+# ----- Excel バイナリ (VBAソースは vba-files/ で管理) -----
+*.xlsm
+*.xlsx
+*.xls
+
+# ----- ツール固有 -----
+.claude/
+
+# ----- OS / IDE -----
+.DS_Store
+Thumbs.db
+desktop.ini
