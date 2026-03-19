@@ -57,6 +57,10 @@ Attribute VB_Exposed = True
 '   InjectTextFromList        … 定義シートのリストから図形にテキストを一括注入
 '   RenameShapesSequentially  … シート上の図形を Top 順に連番命名
 '
+'  ■ボタン配置系
+'   SetupFlowButtons            … 業務フローブックのフローシートに全マクロの実行ボタンを配置
+'   SetupMacroBookButton        … マクロブックの Config シートにボタン配置トリガーを追加
+'
 '  ■内部ヘルパー（直接実行は非推奨）■
 '   GetTargetSheet              … 操作対象シートを解決して返す（ActiveSheet問題の対策）
 '   GetSelectedShapes           … 選択図形を切り出して Shape 配列に格納
@@ -87,6 +91,7 @@ Attribute VB_Exposed = True
 '   v4.1  外部ブック呼び出し時の ActiveSheet 問題に対応（GetTargetSheet 新設）
 '   v4.2  GetTargetSheet に sheetName 引数追加 / 複数ブック競合ロジック修正
 '   v4.3  RenameShapesSequentially でボタン系図形（フォームコントロール/ActiveX）を除外
+'   v5.0  SetupFlowButtons / SetupMacroBookButton 追加（フローシートへのボタン自動配置）
 '=============================================================================
 
 Option Explicit
@@ -936,6 +941,242 @@ Sub RenameShapesSequentially()
 
     ' --- 図形一覧シートに書き出す ---
     Call ExportShapeList(ws.Parent, arr, n)
+
+End Sub
+
+
+'=============================================================================
+' Sub SetupFlowButtons
+' 概要 : 業務フローブックのフローシート上部に全マクロ（11個）の実行ボタンを配置する
+'        既存の BTN_FLOW_ 系ボタンは削除してから再配置する
+'        ボタンの OnAction にはマクロブック名を動的に解決して設定する
+'
+' ボタン配置レイアウト（フローシート上部、横並び2行）：
+'   上段（左→右）: 処理 / 判断 / 開始-終了  ‖  自動接続 / 縦連続接続 / 横連続接続
+'   下段（左→右）: フォント設定 / 列範囲選択 / 接続線切替 / テキスト注入 / 連番命名
+'   ‖ = グループ間の間隔（図形配置系と接続系の区切り）
+'=============================================================================
+Sub SetupFlowButtons()
+
+    If Not LoadConfig() Then Exit Sub
+
+    Dim ws As Worksheet
+    Set ws = GetTargetSheet(m_FlowSheet)
+    If ws Is Nothing Then Exit Sub
+
+    ' --- 既存の BTN_FLOW_ ボタンを削除 ---
+    Dim shp        As Shape
+    Dim toDelete() As String
+    Dim delCount   As Long
+    delCount = 0
+
+    For Each shp In ws.Shapes
+        If Left(shp.Name, 9) = "BTN_FLOW_" Then
+            delCount = delCount + 1
+            ReDim Preserve toDelete(1 To delCount)
+            toDelete(delCount) = shp.Name
+        End If
+    Next shp
+
+    Dim di As Long
+    For di = 1 To delCount
+        ws.Shapes(toDelete(di)).Delete
+    Next di
+
+    ' --- マクロ名・ボタンラベル定義 ---
+    Dim macroNames(1 To 11) As String
+    Dim btnLabels(1 To 11)  As String
+
+    ' 図形配置系
+    macroNames(1) = "Flow_Process"                      : btnLabels(1) = "処理"
+    macroNames(2) = "Flow_Decision"                     : btnLabels(2) = "判断"
+    macroNames(3) = "Flow_StartEnd"                     : btnLabels(3) = "開始/終了"
+    ' 接続系
+    macroNames(4) = "ConnectSelectedShapes_Auto"        : btnLabels(4) = "自動接続"
+    macroNames(5) = "ConnectMultipleShapes_TopToBottom" : btnLabels(5) = "縦連続接続"
+    macroNames(6) = "ConnectMultipleShapes_LeftToRight" : btnLabels(6) = "横連続接続"
+    ' ユーティリティ系
+    macroNames(7)  = "SetParagraphAndFont"              : btnLabels(7)  = "フォント設定"
+    macroNames(8)  = "SelectShapesInColumnRange"        : btnLabels(8)  = "列範囲選択"
+    macroNames(9)  = "ToggleConnectorType"              : btnLabels(9)  = "接続線切替"
+    macroNames(10) = "InjectTextFromList"               : btnLabels(10) = "テキスト注入"
+    macroNames(11) = "RenameShapesSequentially"         : btnLabels(11) = "連番命名"
+
+    ' --- ボタンサイズ・間隔 ---
+    Const BTN_W   As Double = 60    ' ボタン幅（ポイント）
+    Const BTN_H   As Double = 22    ' ボタン高さ（ポイント）
+    Const BTN_GAP As Double = 4     ' ボタン間隔
+    Const ROW_GAP As Double = 4     ' 行間隔
+    Const GRP_GAP As Double = 12    ' グループ間隔（図形配置系と接続系の区切り）
+    Const MARGIN  As Double = 5     ' シート端からのマージン
+
+    ' --- 配置起点 ---
+    Dim startLeft As Double
+    Dim startTop  As Double
+    startLeft = ws.Cells(1, 1).Left + MARGIN
+    startTop  = ws.Cells(1, 1).Top  + MARGIN
+
+    ' --- OnAction に埋め込むマクロブック名 ---
+    Dim macroBook As String
+    macroBook = ThisWorkbook.Name
+
+    ' --- ボタン色定数 ---
+    Const FILL_R As Long = 70
+    Const FILL_G As Long = 130
+    Const FILL_B As Long = 180
+    Const LINE_R As Long = 30
+    Const LINE_G As Long = 90
+    Const LINE_B As Long = 140
+    Const TEXT_R As Long = 255
+    Const TEXT_G As Long = 255
+    Const TEXT_B As Long = 255
+
+    Dim i       As Long
+    Dim curLeft As Double
+    Dim curTop  As Double
+    Dim btn     As Shape
+
+    ' --- 上段: ボタン 1〜6（図形配置系3 + 接続系3）---
+    curLeft = startLeft
+    curTop  = startTop
+
+    For i = 1 To 6
+        Set btn = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
+            curLeft, curTop, BTN_W, BTN_H)
+
+        btn.Name     = "BTN_FLOW_" & Format(i, "00")
+        btn.OnAction = "'" & macroBook & "'!" & macroNames(i)
+
+        With btn.Fill
+            .ForeColor.RGB = RGB(FILL_R, FILL_G, FILL_B)
+        End With
+        With btn.Line
+            .ForeColor.RGB = RGB(LINE_R, LINE_G, LINE_B)
+            .Weight = 0.75
+        End With
+        With btn.TextFrame2
+            .TextRange.Text = btnLabels(i)
+            .TextRange.Font.Color.RGB = RGB(TEXT_R, TEXT_G, TEXT_B)
+            .TextRange.Font.Size = 8
+            .TextRange.Font.Name = FONT_NAME
+            .VerticalAnchor = msoAnchorMiddle
+            .TextRange.ParagraphFormat.Alignment = msoAlignCenter
+        End With
+
+        ' 3番目のあとにグループ間隔を挿入
+        If i = 3 Then
+            curLeft = curLeft + BTN_W + GRP_GAP
+        Else
+            curLeft = curLeft + BTN_W + BTN_GAP
+        End If
+
+        Set btn = Nothing
+    Next i
+
+    ' --- 下段: ボタン 7〜11（ユーティリティ系）---
+    curLeft = startLeft
+    curTop  = startTop + BTN_H + ROW_GAP
+
+    For i = 7 To 11
+        Set btn = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
+            curLeft, curTop, BTN_W, BTN_H)
+
+        btn.Name     = "BTN_FLOW_" & Format(i, "00")
+        btn.OnAction = "'" & macroBook & "'!" & macroNames(i)
+
+        With btn.Fill
+            .ForeColor.RGB = RGB(FILL_R, FILL_G, FILL_B)
+        End With
+        With btn.Line
+            .ForeColor.RGB = RGB(LINE_R, LINE_G, LINE_B)
+            .Weight = 0.75
+        End With
+        With btn.TextFrame2
+            .TextRange.Text = btnLabels(i)
+            .TextRange.Font.Color.RGB = RGB(TEXT_R, TEXT_G, TEXT_B)
+            .TextRange.Font.Size = 8
+            .TextRange.Font.Name = FONT_NAME
+            .VerticalAnchor = msoAnchorMiddle
+            .TextRange.ParagraphFormat.Alignment = msoAlignCenter
+        End With
+
+        curLeft = curLeft + BTN_W + BTN_GAP
+        Set btn = Nothing
+    Next i
+
+    MsgBox "11個のボタンを「" & m_FlowSheet & "」シートの上部に配置しました。" & vbCrLf & _
+           "マクロブック（" & macroBook & "）が開いている状態でクリックしてください。", _
+           vbInformation, "ボタン配置完了"
+
+End Sub
+
+
+'=============================================================================
+' Sub SetupMacroBookButton
+' 概要 : マクロブック（ThisWorkbook）の Config シートに
+'        SetupFlowButtons を呼び出すボタンを追加する
+'        このマクロを1回実行しておくことで、以降はボタンクリックだけで
+'        業務フローブックへのボタン配置が完了する
+'=============================================================================
+Sub SetupMacroBookButton()
+
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(CONFIG_SHEET_NAME)
+    On Error GoTo 0
+
+    If ws Is Nothing Then
+        MsgBox "「" & CONFIG_SHEET_NAME & "」シートが見つかりません。", _
+               vbExclamation, "エラー"
+        Exit Sub
+    End If
+
+    ' --- 既存ボタンを削除 ---
+    Dim shp As Shape
+    For Each shp In ws.Shapes
+        If shp.Name = "BTN_SETUP_FLOW" Then
+            shp.Delete
+            Exit For
+        End If
+    Next shp
+
+    ' --- Config シートの設定行の下に配置 ---
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+
+    Dim btnLeft As Double
+    Dim btnTop  As Double
+    btnLeft = ws.Cells(lastRow + 2, 1).Left + 5
+    btnTop  = ws.Cells(lastRow + 2, 1).Top  + 3
+
+    Dim btn As Shape
+    Set btn = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
+        btnLeft, btnTop, 190, 28)
+
+    btn.Name     = "BTN_SETUP_FLOW"
+    btn.OnAction = "SetupFlowButtons"
+
+    With btn.Fill
+        .ForeColor.RGB = RGB(34, 139, 34)
+    End With
+    With btn.Line
+        .ForeColor.RGB = RGB(0, 100, 0)
+        .Weight = 0.75
+    End With
+    With btn.TextFrame2
+        .TextRange.Text = "業務フローブックにボタンを配置"
+        .TextRange.Font.Color.RGB = RGB(255, 255, 255)
+        .TextRange.Font.Size = 9
+        .TextRange.Font.Name = FONT_NAME
+        .VerticalAnchor = msoAnchorMiddle
+        .TextRange.ParagraphFormat.Alignment = msoAlignCenter
+    End With
+
+    Set btn = Nothing
+
+    MsgBox "Config シートにボタンを配置しました。" & vbCrLf & _
+           "業務フローブックを開いた状態でクリックすると、フローシートにボタンが配置されます。", _
+           vbInformation, "完了"
 
 End Sub
 
