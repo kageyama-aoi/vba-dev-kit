@@ -856,6 +856,9 @@ End Sub
 Private Sub ExportShapeList(wb As Workbook, arr() As Shape, n As Long)
 
     Dim wsList As Worksheet
+    Dim ws     As Worksheet
+
+    Set ws = wb.Worksheets(FLOW_SHEET_NAME)
 
     ' シートの取得または新規作成
     On Error Resume Next
@@ -872,17 +875,75 @@ Private Sub ExportShapeList(wb As Workbook, arr() As Shape, n As Long)
     ' ヘッダー行
     wsList.Cells(1, 1).Value = "図形名"
     wsList.Cells(1, 2).Value = "種別"
+    wsList.Cells(1, 3).Value = "テキスト"
+    wsList.Cells(1, 4).Value = "行"
+    wsList.Cells(1, 5).Value = "列"
 
-    ' データ行：図形名と種別を書き出す
-    Dim i As Long
+    ' データ行：図形名・種別・テキスト・位置を書き出す
+    Dim i   As Long
+    Dim txt As String
+
     For i = 1 To n
-        shpName = arr(i).Name
+        ' テキスト取得（コネクタ等でエラーになる場合は空欄）
+        On Error Resume Next
+        txt = arr(i).TextFrame2.TextRange.Text
+        If Err.Number <> 0 Then txt = ""
+        On Error GoTo 0
 
         wsList.Cells(i + 1, 1).Value = arr(i).Name
         wsList.Cells(i + 1, 2).Value = GetShapeKind(arr(i))
+        wsList.Cells(i + 1, 3).Value = txt
+        wsList.Cells(i + 1, 4).Value = TopToRowNum(ws, arr(i).Top)
+        wsList.Cells(i + 1, 5).Value = LeftToColLetter(ws, arr(i).Left)
     Next i
 
     ' 列幅を自動調整
-    wsList.Columns("A:B").AutoFit
+    wsList.Columns("A:E").AutoFit
 
 End Sub
+
+
+'=============================================================================
+' Function TopToRowNum  【内部ヘルパー・直接実行は非推奨】
+' 概要 : Top 座標（ポイント）から最も近い Excel 行番号を返す
+'=============================================================================
+Private Function TopToRowNum(ws As Worksheet, topPt As Double) As Long
+
+    Dim cum As Double
+    Dim r   As Long
+
+    cum = 0
+    For r = 1 To 2000
+        cum = cum + ws.Rows(r).Height
+        If cum >= topPt Then
+            TopToRowNum = r
+            Exit Function
+        End If
+    Next r
+
+    TopToRowNum = r
+
+End Function
+
+
+'=============================================================================
+' Function LeftToColLetter  【内部ヘルパー・直接実行は非推奨】
+' 概要 : Left 座標（ポイント）から最も近い Excel 列アルファベットを返す
+'=============================================================================
+Private Function LeftToColLetter(ws As Worksheet, leftPt As Double) As String
+
+    Dim cum As Double
+    Dim c   As Long
+
+    cum = 0
+    For c = 1 To 500
+        cum = cum + ws.Columns(c).Width
+        If cum >= leftPt Then
+            LeftToColLetter = Split(ws.Cells(1, c).Address(True, False), "$")(0)
+            Exit Function
+        End If
+    Next c
+
+    LeftToColLetter = Split(ws.Cells(1, c).Address(True, False), "$")(0)
+
+End Function
