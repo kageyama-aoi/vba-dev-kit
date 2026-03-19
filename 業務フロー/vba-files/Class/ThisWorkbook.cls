@@ -107,6 +107,10 @@ Private Const FLOW_SHEET_NAME As String = "Sheet1"
 '     InjectTextFromList が参照する図形名・テキストの対応表シート
 Private Const DEF_SHEET_NAME As String = "フロー定義"
 
+' --- 図形一覧シートの名前 ---
+'     RenameShapesSequentially がリネーム結果を書き出すシート
+Private Const LIST_SHEET_NAME As String = "図形一覧"
+
 ' --- 処理・判断図形サイズ（センチメートル）---
 Private Const SHAPE_WIDTH_CM  As Double = 2.5
 Private Const SHAPE_HEIGHT_CM As Double = 1.2
@@ -817,5 +821,68 @@ Sub RenameShapesSequentially()
     Next i
 
     MsgBox n & " 件の図形を連番で命名しました。", vbInformation, "完了"
+
+    ' --- 図形一覧シートに書き出す ---
+    Call ExportShapeList(ws.Parent, arr, n)
+
+End Sub
+
+
+'=============================================================================
+' Sub ExportShapeList  【内部ヘルパー・直接実行は非推奨】
+' 概要 : リネーム済み図形の一覧を「図形一覧」シートに書き出す
+'        シートが存在しない場合は新規作成、存在する場合は上書き
+'
+' 書き出し形式：
+'   1行目  … ヘッダー（A: 図形名 / B: 種別）
+'   2行目以降 … 図形名と種別（Top 座標順）
+'=============================================================================
+Private Sub ExportShapeList(wb As Workbook, arr() As Shape, n As Long)
+
+    Dim wsList As Worksheet
+
+    ' シートの取得または新規作成
+    On Error Resume Next
+    Set wsList = wb.Worksheets(LIST_SHEET_NAME)
+    On Error GoTo 0
+
+    If wsList Is Nothing Then
+        Set wsList = wb.Worksheets.Add(After:=wb.Worksheets(wb.Worksheets.count))
+        wsList.Name = LIST_SHEET_NAME
+    Else
+        wsList.Cells.ClearContents
+    End If
+
+    ' ヘッダー行
+    wsList.Cells(1, 1).Value = "図形名"
+    wsList.Cells(1, 2).Value = "種別"
+
+    ' データ行：図形名と種別を書き出す
+    Dim i       As Long
+    Dim shpName As String
+    Dim kind    As String
+
+    For i = 1 To n
+        shpName = arr(i).Name
+
+        ' 図形名から種別を抽出（FLOW_{種別}_{番号} の中間部分）
+        If InStr(shpName, "FLOW_Arrow") > 0 Then
+            kind = "Arrow"
+        ElseIf InStr(shpName, "FLOW_Process") > 0 Then
+            kind = "Process"
+        ElseIf InStr(shpName, "FLOW_Decision") > 0 Then
+            kind = "Decision"
+        ElseIf InStr(shpName, "FLOW_StartEnd") > 0 Then
+            kind = "StartEnd"
+        Else
+            kind = "Shape"
+        End If
+
+        wsList.Cells(i + 1, 1).Value = shpName
+        wsList.Cells(i + 1, 2).Value = kind
+    Next i
+
+    ' 列幅を自動調整
+    wsList.Columns("A:B").AutoFit
 
 End Sub
