@@ -24,7 +24,7 @@ Attribute VB_Exposed = True
 '   一元管理しています。対象シートの解決ロジックはそこだけ変更してください。
 '
 '   【現在の解決ロジック（GetTargetSheet 関数）】
-'     1. 開いているブックの中から TARGET_BOOK_KEYWORD を名前に含むものを検索
+'     1. 開いているブックの中から対象ブックキーワード（Config シート設定）を名前に含むものを検索
 '        （ThisWorkbook 自身は除外。単体ファイル用途はフォールバックへ）
 '     2. 該当ブックが 1 件 → そのブックを使用
 '        該当ブックが複数 → InputBox でユーザーに選ばせる
@@ -32,8 +32,8 @@ Attribute VB_Exposed = True
 '     3. sheetName が明示指定されていればそのシートを返す
 '        省略時は ActiveSheet を返す
 '
-'   ブック名の判定キーワードは定数 TARGET_BOOK_KEYWORD で変更できます。
-'   図形シートのシート名は定数 FLOW_SHEET_NAME で変更できます。
+'   ブック名の判定キーワードは Config シートの「対象ブックキーワード」で変更できます。
+'   図形シートのシート名は Config シートの「フローシート名」で変更できます。
 '
 ' 【公開マクロ一覧】────────────────────────────────────────
 '
@@ -96,20 +96,8 @@ Option Explicit
 ' ■ 設定定数（デザイン変更はここを編集する）
 '=============================================================================
 
-' --- 操作対象ブックの判定キーワード ---
-Private Const TARGET_BOOK_KEYWORD As String = "業務フロー"
-
-' --- 図形を配置するシートの名前 ---
-'     このシートが図形配置・接続の対象になる
-Private Const FLOW_SHEET_NAME As String = "Sheet1"
-
-' --- 定義シートの名前 ---
-'     InjectTextFromList が参照する図形名・テキストの対応表シート
-Private Const DEF_SHEET_NAME As String = "フロー定義"
-
-' --- 図形一覧シートの名前 ---
-'     RenameShapesSequentially がリネーム結果を書き出すシート
-Private Const LIST_SHEET_NAME As String = "図形一覧"
+' --- Config シートの名前（このシート名だけはコードで固定）---
+Private Const CONFIG_SHEET_NAME As String = "Config"
 
 ' --- 処理・判断図形サイズ（センチメートル）---
 Private Const SHAPE_WIDTH_CM  As Double = 2.5
@@ -144,6 +132,15 @@ Private Const CONN_WEIGHT As Single = 1
 
 
 '=============================================================================
+' ■ Config シートから読み込む設定値（実行時に LoadConfig で初期化）
+'=============================================================================
+Private m_Keyword   As String   ' 対象ブックキーワード
+Private m_FlowSheet As String   ' フローシート名
+Private m_DefSheet  As String   ' 定義シート名
+Private m_ListSheet As String   ' 一覧シート名
+
+
+'=============================================================================
 ' ■ 接続ポイント番号の定数
 '   上=1 / 右=2 / 下=3 / 左=4
 '=============================================================================
@@ -158,10 +155,12 @@ Private Const CP_LEFT   As Long = 4
 '=============================================================================
 Sub Flow_Process()
 
+    If Not LoadConfig() Then Exit Sub
+
     Dim ws  As Worksheet
     Dim shp As Shape
 
-    Set ws = GetTargetSheet(FLOW_SHEET_NAME)
+    Set ws = GetTargetSheet(m_FlowSheet)
     If ws Is Nothing Then Exit Sub
 
     Set shp = ws.Shapes.AddShape( _
@@ -181,10 +180,12 @@ End Sub
 '=============================================================================
 Sub Flow_Decision()
 
+    If Not LoadConfig() Then Exit Sub
+
     Dim ws  As Worksheet
     Dim shp As Shape
 
-    Set ws = GetTargetSheet(FLOW_SHEET_NAME)
+    Set ws = GetTargetSheet(m_FlowSheet)
     If ws Is Nothing Then Exit Sub
 
     Set shp = ws.Shapes.AddShape( _
@@ -204,10 +205,12 @@ End Sub
 '=============================================================================
 Sub Flow_StartEnd()
 
+    If Not LoadConfig() Then Exit Sub
+
     Dim ws  As Worksheet
     Dim shp As Shape
 
-    Set ws = GetTargetSheet(FLOW_SHEET_NAME)
+    Set ws = GetTargetSheet(m_FlowSheet)
     If ws Is Nothing Then Exit Sub
 
     Set shp = ws.Shapes.AddShape( _
@@ -254,6 +257,8 @@ End Sub
 ' Sub ConnectSelectedShapes_Auto
 '=============================================================================
 Sub ConnectSelectedShapes_Auto()
+
+    If Not LoadConfig() Then Exit Sub
 
     If TypeName(Selection) <> "DrawingObjects" Then
         MsgBox "図形を選択してから実行してください。", vbExclamation, "選択エラー"
@@ -305,6 +310,8 @@ End Sub
 '=============================================================================
 Sub ConnectMultipleShapes_TopToBottom()
 
+    If Not LoadConfig() Then Exit Sub
+
     Dim arr() As Shape
     Dim n     As Long
 
@@ -324,6 +331,8 @@ End Sub
 ' Sub ConnectMultipleShapes_LeftToRight
 '=============================================================================
 Sub ConnectMultipleShapes_LeftToRight()
+
+    If Not LoadConfig() Then Exit Sub
 
     Dim arr() As Shape
     Dim n     As Long
@@ -347,6 +356,83 @@ End Sub
 '=============================================================================
 
 '=============================================================================
+' Function LoadConfig  【内部ヘルパー・直接実行は非推奨】
+' 概要 : Config シートから設定値を読み込み、モジュール変数に格納する
+' 戻値 : True = 正常読み込み / False = エラー（処理を中断すること）
+'
+' Config シートの形式（ThisWorkbook 内）：
+'   1行目  … ヘッダー（読み飛ばし）
+'   A列    … 設定名
+'   B列    … 値
+'   設定名 ：対象ブックキーワード / フローシート名 / 定義シート名 / 一覧シート名
+'=============================================================================
+Private Function LoadConfig() As Boolean
+
+    LoadConfig = False
+
+    m_Keyword   = GetConfigValue("対象ブックキーワード")
+    If m_Keyword = "" Then Exit Function
+
+    m_FlowSheet = GetConfigValue("フローシート名")
+    If m_FlowSheet = "" Then Exit Function
+
+    m_DefSheet  = GetConfigValue("定義シート名")
+    If m_DefSheet = "" Then Exit Function
+
+    m_ListSheet = GetConfigValue("一覧シート名")
+    If m_ListSheet = "" Then Exit Function
+
+    LoadConfig = True
+
+End Function
+
+
+'=============================================================================
+' Function GetConfigValue  【内部ヘルパー・直接実行は非推奨】
+' 概要 : Config シートから指定キーの値を返す
+'        シートが存在しない / キーが見つからない / 値が空の場合はエラー表示して "" を返す
+'=============================================================================
+Private Function GetConfigValue(key As String) As String
+
+    GetConfigValue = ""
+
+    ' Config シートの存在確認
+    Dim wsConfig As Worksheet
+    On Error Resume Next
+    Set wsConfig = ThisWorkbook.Worksheets(CONFIG_SHEET_NAME)
+    On Error GoTo 0
+
+    If wsConfig Is Nothing Then
+        MsgBox "「" & CONFIG_SHEET_NAME & "」シートが見つかりません。" & vbCrLf & _
+               "マクロブックに Config シートを作成してください。", _
+               vbExclamation, "設定エラー"
+        Exit Function
+    End If
+
+    ' A列でキーを検索（2行目以降）
+    Dim i   As Long
+    Dim val As String
+
+    For i = 2 To 1000
+        If wsConfig.Cells(i, 1).Value = "" Then Exit For
+        If wsConfig.Cells(i, 1).Value = key Then
+            val = Trim(wsConfig.Cells(i, 2).Value)
+            If val = "" Then
+                MsgBox "Config シートの「" & key & "」の値が空です。設定してください。", _
+                       vbExclamation, "設定エラー"
+                Exit Function
+            End If
+            GetConfigValue = val
+            Exit Function
+        End If
+    Next i
+
+    MsgBox "Config シートに「" & key & "」の設定が見つかりません。", _
+           vbExclamation, "設定エラー"
+
+End Function
+
+'=============================================================================
 ' Function GetTargetSheet  【内部ヘルパー・直接実行は非推奨】
 ' 概要 : 操作対象の Worksheet を解決して返す
 '
@@ -354,7 +440,7 @@ End Sub
 ' 戻値 : Worksheet オブジェクト（解決失敗時は Nothing を返しメッセージを表示）
 '
 ' 解決ロジック:
-'   1. TARGET_BOOK_KEYWORD を名前に含むブックを検索（ThisWorkbook は除外）
+'   1. 対象ブックキーワード（Config シートで設定）を名前に含むブックを検索（ThisWorkbook は除外）
 '   2. 0件 → ThisWorkbook をフォールバック
 '      1件 → そのブックを使用
 '      複数 → InputBox でユーザーに選ばせる
@@ -370,9 +456,9 @@ Private Function GetTargetSheet(Optional sheetName As String = "") As Worksheet
 
     matchCount = 0
 
-    ' --- TARGET_BOOK_KEYWORD を名前に含むブックを検索（ThisWorkbook は除外）---
+    ' --- 対象ブックキーワードを名前に含むブックを検索（ThisWorkbook は除外）---
     For Each wb In Application.Workbooks
-        If InStr(wb.Name, TARGET_BOOK_KEYWORD) > 0 Then
+        If InStr(wb.Name, m_Keyword) > 0 Then
             If wb.Name <> ThisWorkbook.Name Then
                 matchCount = matchCount + 1
                 ReDim Preserve matched(1 To matchCount)
@@ -432,7 +518,7 @@ Private Function GetTargetSheet(Optional sheetName As String = "") As Worksheet
 
 ErrNoSheet:
     MsgBox "シート「" & sheetName & "」が見つかりません。" & vbCrLf & _
-           "定数 FLOW_SHEET_NAME / DEF_SHEET_NAME を確認してください。", _
+           "Config シートの「フローシート名」/「定義シート名」を確認してください。", _
            vbExclamation, "シート取得エラー"
     Set GetTargetSheet = Nothing
 
@@ -547,7 +633,7 @@ Private Sub ConnectTwoShapes_Vertical(shp1 As Shape, shp2 As Shape)
     Dim ws   As Worksheet
     Dim conn As Shape
 
-    Set ws = GetTargetSheet(FLOW_SHEET_NAME)
+    Set ws = GetTargetSheet(m_FlowSheet)
     If ws Is Nothing Then Exit Sub
 
     Set conn = ws.Shapes.AddConnector(msoConnectorStraight, 0, 0, 0, 0)
@@ -574,7 +660,7 @@ Private Sub ConnectTwoShapes_Horizontal(shp1 As Shape, shp2 As Shape)
     Dim ws   As Worksheet
     Dim conn As Shape
 
-    Set ws = GetTargetSheet(FLOW_SHEET_NAME)
+    Set ws = GetTargetSheet(m_FlowSheet)
     If ws Is Nothing Then Exit Sub
 
     Set conn = ws.Shapes.AddConnector(msoConnectorStraight, 0, 0, 0, 0)
@@ -603,6 +689,8 @@ End Sub
 ' Sub SetParagraphAndFont
 '=============================================================================
 Sub SetParagraphAndFont()
+
+    If Not LoadConfig() Then Exit Sub
 
     Dim shp As Shape
 
@@ -640,8 +728,10 @@ End Sub
 '=============================================================================
 Sub SelectShapesInColumnRange()
 
+    If Not LoadConfig() Then Exit Sub
+
     Dim ws As Worksheet
-    Set ws = GetTargetSheet(FLOW_SHEET_NAME)
+    Set ws = GetTargetSheet(m_FlowSheet)
     If ws Is Nothing Then Exit Sub
 
     Dim inputStart As String
@@ -695,6 +785,8 @@ End Sub
 '=============================================================================
 Sub ToggleConnectorType()
 
+    If Not LoadConfig() Then Exit Sub
+
     Dim shp As Shape
 
     If TypeName(Selection) <> "DrawingObjects" Then
@@ -730,7 +822,7 @@ End Sub
 ' Sub InjectTextFromList
 ' 概要 : 定義シートのリストを読み、図形に対応するテキストと書式を一括適用する
 '
-' 定義シート（DEF_SHEET_NAME）の形式：
+' 定義シート（Config シートの「定義シート名」で指定）の形式：
 '   1行目 … ヘッダー行（読み飛ばす）
 '   A列   … 図形の名前（例: Flow_001）
 '   B列   … 挿入するテキスト
@@ -740,6 +832,8 @@ End Sub
 '=============================================================================
 Sub InjectTextFromList()
 
+    If Not LoadConfig() Then Exit Sub
+
     Dim wsDef    As Worksheet
     Dim ws       As Worksheet
     Dim shp      As Shape
@@ -748,10 +842,10 @@ Sub InjectTextFromList()
     Dim txt      As String
     Dim hitCount As Long
 
-    Set wsDef = GetTargetSheet(DEF_SHEET_NAME)
+    Set wsDef = GetTargetSheet(m_DefSheet)
     If wsDef Is Nothing Then Exit Sub
 
-    Set ws = GetTargetSheet(FLOW_SHEET_NAME)
+    Set ws = GetTargetSheet(m_FlowSheet)
     If ws Is Nothing Then Exit Sub
 
     hitCount = 0
@@ -797,13 +891,15 @@ End Sub
 '=============================================================================
 Sub RenameShapesSequentially()
 
+    If Not LoadConfig() Then Exit Sub
+
     Dim ws  As Worksheet
     Dim arr() As Shape
     Dim n   As Long
     Dim i   As Long, j As Long
     Dim tmp As Shape
 
-    Set ws = GetTargetSheet(FLOW_SHEET_NAME)
+    Set ws = GetTargetSheet(m_FlowSheet)
     If ws Is Nothing Then Exit Sub
 
     If ws.Shapes.count = 0 Then
@@ -858,16 +954,16 @@ Private Sub ExportShapeList(wb As Workbook, arr() As Shape, n As Long)
     Dim wsList As Worksheet
     Dim ws     As Worksheet
 
-    Set ws = wb.Worksheets(FLOW_SHEET_NAME)
+    Set ws = wb.Worksheets(m_FlowSheet)
 
     ' シートの取得または新規作成
     On Error Resume Next
-    Set wsList = wb.Worksheets(LIST_SHEET_NAME)
+    Set wsList = wb.Worksheets(m_ListSheet)
     On Error GoTo 0
 
     If wsList Is Nothing Then
         Set wsList = wb.Worksheets.Add(After:=wb.Worksheets(wb.Worksheets.count))
-        wsList.Name = LIST_SHEET_NAME
+        wsList.Name = m_ListSheet
     Else
         wsList.Cells.ClearContents
     End If
