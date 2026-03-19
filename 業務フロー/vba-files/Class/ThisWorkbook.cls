@@ -577,8 +577,8 @@ Sub SetParagraphAndFont()
             End With
 
             With shp.TextFrame2.TextRange.Font
-                .Name = "メイリオ"
-                .Size = 9
+                .Name = FONT_NAME
+                .Size = FONT_SIZE
             End With
 
         End If
