@@ -462,6 +462,28 @@ End Function
 
 
 '=============================================================================
+' Function GetShapeKind  【内部ヘルパー・直接実行は非推奨】
+' 概要 : シェイプの種別を文字列で返す
+' 戻値 : "Process" / "Decision" / "StartEnd" / "Arrow" / "Shape"
+'=============================================================================
+Private Function GetShapeKind(shp As Shape) As String
+
+    If shp.Connector Then
+        GetShapeKind = "Arrow"
+    ElseIf shp.AutoShapeType = msoShapeRectangle Then
+        GetShapeKind = "Process"
+    ElseIf shp.AutoShapeType = msoShapeDiamond Then
+        GetShapeKind = "Decision"
+    ElseIf shp.AutoShapeType = msoShapeRoundedRectangle Then
+        GetShapeKind = "StartEnd"
+    Else
+        GetShapeKind = "Shape"
+    End If
+
+End Function
+
+
+'=============================================================================
 ' Function GetSelectedShapes  【内部ヘルパー・直接実行は非推奨】
 '=============================================================================
 Private Function GetSelectedShapes(arr() As Shape, n As Long) As Boolean
@@ -786,20 +808,8 @@ Sub RenameShapesSequentially()
     Next i
 
     ' 種別を判定して通し番号で命名
-    Dim prefix As String
     For i = 1 To n
-        If arr(i).Connector Then
-            prefix = "FLOW_Arrow"
-        ElseIf arr(i).AutoShapeType = msoShapeRectangle Then
-            prefix = "FLOW_Process"
-        ElseIf arr(i).AutoShapeType = msoShapeDiamond Then
-            prefix = "FLOW_Decision"
-        ElseIf arr(i).AutoShapeType = msoShapeRoundedRectangle Then
-            prefix = "FLOW_StartEnd"
-        Else
-            prefix = "FLOW_Shape"
-        End If
-        arr(i).Name = prefix & "_" & Format(i, "000")
+        arr(i).Name = "FLOW_" & GetShapeKind(arr(i)) & "_" & Format(i, "000")
     Next i
 
     MsgBox n & " 件の図形を連番で命名しました。", vbInformation, "完了"
@@ -840,28 +850,12 @@ Private Sub ExportShapeList(wb As Workbook, arr() As Shape, n As Long)
     wsList.Cells(1, 2).Value = "種別"
 
     ' データ行：図形名と種別を書き出す
-    Dim i       As Long
-    Dim shpName As String
-    Dim kind    As String
-
+    Dim i As Long
     For i = 1 To n
         shpName = arr(i).Name
 
-        ' 図形名から種別を抽出（FLOW_{種別}_{番号} の中間部分）
-        If InStr(shpName, "FLOW_Arrow") > 0 Then
-            kind = "Arrow"
-        ElseIf InStr(shpName, "FLOW_Process") > 0 Then
-            kind = "Process"
-        ElseIf InStr(shpName, "FLOW_Decision") > 0 Then
-            kind = "Decision"
-        ElseIf InStr(shpName, "FLOW_StartEnd") > 0 Then
-            kind = "StartEnd"
-        Else
-            kind = "Shape"
-        End If
-
-        wsList.Cells(i + 1, 1).Value = shpName
-        wsList.Cells(i + 1, 2).Value = kind
+        wsList.Cells(i + 1, 1).Value = arr(i).Name
+        wsList.Cells(i + 1, 2).Value = GetShapeKind(arr(i))
     Next i
 
     ' 列幅を自動調整
