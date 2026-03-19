@@ -874,12 +874,12 @@ Private Sub ExportShapeList(wb As Workbook, arr() As Shape, n As Long)
 
     ' ヘッダー行
     wsList.Cells(1, 1).Value = "図形名"
-    wsList.Cells(1, 2).Value = "種別"
-    wsList.Cells(1, 3).Value = "テキスト"
+    wsList.Cells(1, 2).Value = "テキスト"
+    wsList.Cells(1, 3).Value = "種別"
     wsList.Cells(1, 4).Value = "行"
     wsList.Cells(1, 5).Value = "列"
 
-    ' データ行：図形名・種別・テキスト・位置を書き出す
+    ' データ行：図形名・テキスト・種別・位置を書き出す
     Dim i   As Long
     Dim txt As String
 
@@ -891,8 +891,8 @@ Private Sub ExportShapeList(wb As Workbook, arr() As Shape, n As Long)
         On Error GoTo 0
 
         wsList.Cells(i + 1, 1).Value = arr(i).Name
-        wsList.Cells(i + 1, 2).Value = GetShapeKind(arr(i))
-        wsList.Cells(i + 1, 3).Value = txt
+        wsList.Cells(i + 1, 2).Value = txt
+        wsList.Cells(i + 1, 3).Value = GetShapeKind(arr(i))
         wsList.Cells(i + 1, 4).Value = TopToRowNum(ws, arr(i).Top)
         wsList.Cells(i + 1, 5).Value = LeftToColLetter(ws, arr(i).Left)
     Next i
