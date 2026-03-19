@@ -310,20 +310,9 @@ Sub ConnectMultipleShapes_TopToBottom()
 
     If Not GetSelectedShapes(arr, n) Then Exit Sub
 
-    Dim i   As Long
-    Dim j   As Long
-    Dim tmp As Shape
+    Call SortShapesByAxis(arr, n, "Top")
 
-    For i = 1 To n - 1
-        For j = i + 1 To n
-            If arr(i).Top > arr(j).Top Then
-                Set tmp = arr(i)
-                Set arr(i) = arr(j)
-                Set arr(j) = tmp
-            End If
-        Next j
-    Next i
-
+    Dim i As Long
     For i = 1 To n - 1
         Call ConnectTwoShapes_Vertical(arr(i), arr(i + 1))
     Next i
@@ -341,20 +330,9 @@ Sub ConnectMultipleShapes_LeftToRight()
 
     If Not GetSelectedShapes(arr, n) Then Exit Sub
 
-    Dim i   As Long
-    Dim j   As Long
-    Dim tmp As Shape
+    Call SortShapesByAxis(arr, n, "Left")
 
-    For i = 1 To n - 1
-        For j = i + 1 To n
-            If arr(i).Left > arr(j).Left Then
-                Set tmp = arr(i)
-                Set arr(i) = arr(j)
-                Set arr(j) = tmp
-            End If
-        Next j
-    Next i
-
+    Dim i As Long
     For i = 1 To n - 1
         Call ConnectTwoShapes_Horizontal(arr(i), arr(i + 1))
     Next i
@@ -459,6 +437,41 @@ ErrNoSheet:
     Set GetTargetSheet = Nothing
 
 End Function
+
+
+'=============================================================================
+' Sub SortShapesByAxis  【内部ヘルパー・直接実行は非推奨】
+' 概要 : Shape 配列を指定軸の座標でバブルソートする
+' 引数 : arr()  … Shape 配列（参照渡し・ソート結果で上書き）
+'         n      … 配列の要素数
+'         axis   … ソートキー "Top"（上から下）/ "Left"（左から右）
+'=============================================================================
+Private Sub SortShapesByAxis(arr() As Shape, n As Long, axis As String)
+
+    Dim i   As Long
+    Dim j   As Long
+    Dim tmp As Shape
+
+    For i = 1 To n - 1
+        For j = i + 1 To n
+            Dim v1 As Double
+            Dim v2 As Double
+            If axis = "Top" Then
+                v1 = arr(i).Top
+                v2 = arr(j).Top
+            Else
+                v1 = arr(i).Left
+                v2 = arr(j).Left
+            End If
+            If v1 > v2 Then
+                Set tmp = arr(i)
+                Set arr(i) = arr(j)
+                Set arr(j) = tmp
+            End If
+        Next j
+    Next i
+
+End Sub
 
 
 '=============================================================================
