@@ -16,6 +16,9 @@ logs/
 # ----- ツール固有 -----
 .claude/settings.local.json
 
+# ----- VBE変換作業用（Shift-JIS中間ファイル）-----
+vba-files/_vbe/
+
 # ----- OS / IDE -----
 .DS_Store
 Thumbs.db
