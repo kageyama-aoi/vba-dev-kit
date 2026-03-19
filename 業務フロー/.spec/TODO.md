@@ -1,7 +1,6 @@
 # TODO - タスクリスト
 
 ## 優先度：高
-- [ ] READMEシート内容の考案・Excel貼り付け可能形式で提供（要望2）
 
 ## 優先度：中
 
@@ -19,3 +18,4 @@
 - [x] 図形一覧の列順変更 / Config 化
 - [x] Config.csv テンプレート作成
 - [x] フローシートへのマクロ実行ボタン自動配置（SetupFlowButtons / SetupMacroBookButton）(#12)
+- [x] READMEシート自動生成（SetupReadmeSheet）(#13)

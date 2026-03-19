@@ -61,6 +61,9 @@ Attribute VB_Exposed = True
 '   SetupFlowButtons            … 業務フローブックのフローシートに全マクロの実行ボタンを配置
 '   SetupMacroBookButton        … マクロブックの Config シートにボタン配置トリガーを追加
 '
+'  ■ドキュメント系
+'   SetupReadmeSheet            … マクロブックに README シートを自動生成（書式付き）
+'
 '  ■内部ヘルパー（直接実行は非推奨）■
 '   GetTargetSheet              … 操作対象シートを解決して返す（ActiveSheet問題の対策）
 '   GetSelectedShapes           … 選択図形を切り出して Shape 配列に格納
@@ -92,6 +95,7 @@ Attribute VB_Exposed = True
 '   v4.2  GetTargetSheet に sheetName 引数追加 / 複数ブック競合ロジック修正
 '   v4.3  RenameShapesSequentially でボタン系図形（フォームコントロール/ActiveX）を除外
 '   v5.0  SetupFlowButtons / SetupMacroBookButton 追加（フローシートへのボタン自動配置）
+'   v5.1  SetupReadmeSheet 追加（README シート自動生成）
 '=============================================================================
 
 Option Explicit
@@ -1174,9 +1178,403 @@ Sub SetupMacroBookButton()
 
     Set btn = Nothing
 
+    ' --- README 生成ボタンも追加 ---
+    Dim btnReadme As Shape
+    For Each shp In ws.Shapes
+        If shp.Name = "BTN_SETUP_README" Then
+            shp.Delete
+            Exit For
+        End If
+    Next shp
+
+    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    btnLeft = ws.Cells(lastRow + 2, 1).Left + 5
+    btnTop  = ws.Cells(lastRow + 2, 1).Top  + 3
+
+    Set btnReadme = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
+        btnLeft, btnTop, 190, 28)
+
+    btnReadme.Name     = "BTN_SETUP_README"
+    btnReadme.OnAction = "SetupReadmeSheet"
+
+    With btnReadme.Fill
+        .ForeColor.RGB = RGB(70, 130, 180)
+    End With
+    With btnReadme.Line
+        .ForeColor.RGB = RGB(30, 90, 140)
+        .Weight = 0.75
+    End With
+    With btnReadme.TextFrame2
+        .TextRange.Text = "README シートを生成"
+        .TextRange.Font.Color.RGB = RGB(255, 255, 255)
+        .TextRange.Font.Size = 9
+        .TextRange.Font.Name = FONT_NAME
+        .VerticalAnchor = msoAnchorMiddle
+        .TextRange.ParagraphFormat.Alignment = msoAlignCenter
+    End With
+
+    Set btnReadme = Nothing
+
     MsgBox "Config シートにボタンを配置しました。" & vbCrLf & _
-           "業務フローブックを開いた状態でクリックすると、フローシートにボタンが配置されます。", _
+           "・緑ボタン：業務フローブックへのボタン配置" & vbCrLf & _
+           "・青ボタン：README シートの生成", _
            vbInformation, "完了"
+
+End Sub
+
+
+'=============================================================================
+' Sub SetupReadmeSheet
+' 概要 : マクロブック（ThisWorkbook）に「README」シートを自動生成する
+'        既存の README シートがある場合は内容を全消去して上書きする
+'
+' 生成内容（各セクション）：
+'   1. タイトル・概要
+'   2. 初期セットアップ手順（5ステップ）
+'   3. 基本的な使い方フロー（6ステップ）
+'   4. マクロ一覧（11個）
+'   5. 参考資料（docs 配下ファイル案内）
+'=============================================================================
+Sub SetupReadmeSheet()
+
+    Const README_NAME As String = "README"
+
+    ' --- README シートの取得または新規作成 ---
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(README_NAME)
+    On Error GoTo 0
+
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(Before:=ThisWorkbook.Worksheets(1))
+        ws.Name = README_NAME
+    Else
+        ws.Cells.ClearContents
+        ws.Cells.ClearFormats
+    End If
+
+    ' --- 列幅設定 ---
+    ws.Columns("A").ColumnWidth = 14    ' カテゴリ・ステップ番号
+    ws.Columns("B").ColumnWidth = 20    ' 操作・ボタン名
+    ws.Columns("C").ColumnWidth = 32    ' マクロ名・備考
+    ws.Columns("D").ColumnWidth = 44    ' 機能説明
+    ws.Columns("E").ColumnWidth = 10    ' 予備
+
+    ' =====================================================================
+    ' セクション共通カラー定数
+    ' =====================================================================
+    Const CLR_TITLE_BG  As Long = 1580800      ' タイトル背景（ダークブルー #182960 近似）
+    Const CLR_SEC_BG    As Long = 4206080       ' セクションヘッダー背景（ダークグレー #404040）
+    Const CLR_TBL_HDR   As Long = 10066329      ' テーブルヘッダー背景（ミディアムグレー #999999）
+    Const CLR_ROW_ALT   As Long = 15921906      ' 偶数行の交互色（薄グレー #F2F2F2）
+    Const CLR_STEP_BG   As Long = 13421772      ' ステップ番号背景（グレー #CCCCCC）
+    Const CLR_WHITE     As Long = 16777215      ' 白（#FFFFFF）
+    Const CLR_BLACK     As Long = 0             ' 黒
+    Const CLR_ACCENT    As Long = 4626167       ' アクセント（ブルー #4682B4 近似）
+
+    Dim r As Long   ' 行カーソル
+    r = 1
+
+    ' =====================================================================
+    ' 【1】タイトルブロック
+    ' =====================================================================
+    ws.Range("A" & r & ":D" & r).Merge
+    ws.Cells(r, 1).Value = "業務フロー補助ツール — 使い方ガイド"
+    With ws.Cells(r, 1)
+        .Font.Name = FONT_NAME
+        .Font.Size = 16
+        .Font.Bold = True
+        .Font.Color = CLR_WHITE
+        .Interior.Color = CLR_ACCENT
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+    End With
+    ws.Rows(r).RowHeight = 36
+    r = r + 1
+
+    ws.Range("A" & r & ":D" & r).Merge
+    ws.Cells(r, 1).Value = "このシートはツールの入口です。初めて使う方はまずここを読んでください。"
+    With ws.Cells(r, 1)
+        .Font.Name = FONT_NAME
+        .Font.Size = 9
+        .Font.Italic = True
+        .Interior.Color = 15131835  ' 薄ブルー #E7F0FA
+        .HorizontalAlignment = xlCenter
+    End With
+    ws.Rows(r).RowHeight = 18
+    r = r + 2
+
+    ' =====================================================================
+    ' 【2】ツール概要
+    ' =====================================================================
+    Call RmWriteSecHeader(ws, r, "■ ツール概要", CLR_SEC_BG)
+    r = r + 1
+
+    ws.Range("A" & r & ":D" & r).Merge
+    ws.Cells(r, 1).Value = _
+        "このExcelマクロブックは、業務フロー図の作成を補助するツールです。" & _
+        "図形の配置・接続・命名・テキスト挿入など、手作業では手間のかかる操作をワンクリックで実行できます。"
+    With ws.Cells(r, 1)
+        .Font.Name = FONT_NAME
+        .Font.Size = 9
+        .WrapText = True
+    End With
+    ws.Rows(r).RowHeight = 30
+    r = r + 1
+
+    ws.Range("A" & r & ":D" & r).Merge
+    ws.Cells(r, 1).Value = _
+        "【前提】マクロブック（このファイル）と業務フローブック（対象ファイル）を同時に開いた状態で使用します。" & _
+        "対象ファイルのブック名には「業務フロー」を含めてください（Config シートで変更可）。"
+    With ws.Cells(r, 1)
+        .Font.Name = FONT_NAME
+        .Font.Size = 9
+        .WrapText = True
+        .Interior.Color = 16777164  ' 薄黄 #FFFFCC
+    End With
+    ws.Rows(r).RowHeight = 30
+    r = r + 2
+
+    ' =====================================================================
+    ' 【3】初期セットアップ
+    ' =====================================================================
+    Call RmWriteSecHeader(ws, r, "■ 初期セットアップ（初回のみ）", CLR_SEC_BG)
+    r = r + 1
+
+    ' テーブルヘッダー
+    Call RmWriteTblHeader(ws, r, Array("ステップ", "操作", "詳細・備考", ""), CLR_TBL_HDR)
+    r = r + 1
+
+    Dim setupData(1 To 5, 1 To 3) As String
+    setupData(1, 1) = "1"
+    setupData(1, 2) = "このブックを開く"
+    setupData(1, 3) = "「マクロを有効にする」を必ず選択すること"
+    setupData(2, 1) = "2"
+    setupData(2, 2) = "Config シートを開く"
+    setupData(2, 3) = "「対象ブックキーワード」「フローシート名」等を確認・変更する"
+    setupData(3, 1) = "3"
+    setupData(3, 2) = "Alt+F8 → SetupMacroBookButton → 実行"
+    setupData(3, 3) = "Config シートに緑のボタンが追加される（初回1回のみ）"
+    setupData(4, 1) = "4"
+    setupData(4, 2) = "業務フローブックを開く"
+    setupData(4, 3) = "ファイル名に Config の「対象ブックキーワード」を含むこと"
+    setupData(5, 1) = "5"
+    setupData(5, 2) = "Config シートの緑ボタンをクリック"
+    setupData(5, 3) = "フローシートの上部に操作ボタンが11個配置される"
+
+    Dim si As Long
+    For si = 1 To 5
+        ws.Range("A" & r & ":B" & r).Merge
+        ws.Cells(r, 1).Value = "STEP " & setupData(si, 1) & "　" & setupData(si, 2)
+        ws.Cells(r, 3).Value = setupData(si, 3)
+        With ws.Cells(r, 1)
+            .Font.Name = FONT_NAME
+            .Font.Size = 9
+            .Font.Bold = True
+        End With
+        ws.Cells(r, 3).Font.Name = FONT_NAME
+        ws.Cells(r, 3).Font.Size = 9
+        ws.Cells(r, 3).WrapText = True
+        If si Mod 2 = 0 Then
+            ws.Range("A" & r & ":D" & r).Interior.Color = CLR_ROW_ALT
+        End If
+        ws.Rows(r).RowHeight = 18
+        r = r + 1
+    Next si
+    r = r + 1
+
+    ' =====================================================================
+    ' 【4】基本的な使い方フロー
+    ' =====================================================================
+    Call RmWriteSecHeader(ws, r, "■ 基本的な使い方フロー", CLR_SEC_BG)
+    r = r + 1
+
+    Dim flowData(1 To 6, 1 To 2) As String
+    flowData(1, 1) = "図形を配置する"
+    flowData(1, 2) = "フローシートで配置したいセルをクリック → 「処理」「判断」「開始/終了」ボタンをクリック"
+    flowData(2, 1) = "図形を接続する"
+    flowData(2, 2) = "接続したい2図形を Ctrl+クリックで選択 → 「自動接続」ボタンで矢印を追加"
+    flowData(3, 1) = "複数図形を一括接続"
+    flowData(3, 2) = "縦に並んだ図形を選択 →「縦連続接続」、横に並んだ場合は「横連続接続」"
+    flowData(4, 1) = "図形に名前をつける"
+    flowData(4, 2) = "フローシートで全図形を選択（Ctrl+A）→「連番命名」で FLOW_Process_001 形式に命名"
+    flowData(5, 1) = "テキストを一括入力"
+    flowData(5, 2) = "定義シート（A列：図形名 / B列：テキスト）を埋めて →「テキスト注入」を実行"
+    flowData(6, 1) = "書式を統一する"
+    flowData(6, 2) = "対象図形を選択 →「フォント設定」でフォント・段落書式を一括適用"
+
+    Dim fi As Long
+    For fi = 1 To 6
+        ws.Cells(r, 1).Value = fi & "."
+        ws.Range("B" & r & ":C" & r).Merge
+        ws.Cells(r, 2).Value = flowData(fi, 1)
+        ws.Cells(r, 4).Value = flowData(fi, 2)
+        With ws.Cells(r, 1)
+            .Font.Name = FONT_NAME
+            .Font.Size = 9
+            .Font.Bold = True
+            .HorizontalAlignment = xlCenter
+            .Interior.Color = CLR_STEP_BG
+        End With
+        ws.Cells(r, 2).Font.Name = FONT_NAME
+        ws.Cells(r, 2).Font.Size = 9
+        ws.Cells(r, 2).Font.Bold = True
+        ws.Cells(r, 4).Font.Name = FONT_NAME
+        ws.Cells(r, 4).Font.Size = 9
+        ws.Cells(r, 4).WrapText = True
+        If fi Mod 2 = 0 Then
+            ws.Range("A" & r & ":D" & r).Interior.Color = CLR_ROW_ALT
+        End If
+        ws.Rows(r).RowHeight = 18
+        r = r + 1
+    Next fi
+    r = r + 1
+
+    ' =====================================================================
+    ' 【5】マクロ一覧
+    ' =====================================================================
+    Call RmWriteSecHeader(ws, r, "■ マクロ一覧（全11機能）", CLR_SEC_BG)
+    r = r + 1
+
+    Call RmWriteTblHeader(ws, r, Array("カテゴリ", "ボタン名", "マクロ名", "機能説明"), CLR_TBL_HDR)
+    r = r + 1
+
+    Dim macroData(1 To 11, 1 To 4) As String
+    macroData(1, 1)  = "図形配置"  : macroData(1, 2)  = "処理"
+    macroData(1, 3)  = "Flow_Process"
+    macroData(1, 4)  = "矩形（処理ボックス）を選択セル位置に配置する"
+    macroData(2, 1)  = "図形配置"  : macroData(2, 2)  = "判断"
+    macroData(2, 3)  = "Flow_Decision"
+    macroData(2, 4)  = "菱形（判断ボックス）を選択セル位置に配置する"
+    macroData(3, 1)  = "図形配置"  : macroData(3, 2)  = "開始/終了"
+    macroData(3, 3)  = "Flow_StartEnd"
+    macroData(3, 4)  = "角丸矩形（開始/終了）を選択セル位置に配置する"
+    macroData(4, 1)  = "接続"      : macroData(4, 2)  = "自動接続"
+    macroData(4, 3)  = "ConnectSelectedShapes_Auto"
+    macroData(4, 4)  = "選択した2図形を位置関係（縦/横）で自動判定して矢印接続する"
+    macroData(5, 1)  = "接続"      : macroData(5, 2)  = "縦連続接続"
+    macroData(5, 3)  = "ConnectMultipleShapes_TopToBottom"
+    macroData(5, 4)  = "選択した複数図形をTop座標順に上から下へ連続接続する"
+    macroData(6, 1)  = "接続"      : macroData(6, 2)  = "横連続接続"
+    macroData(6, 3)  = "ConnectMultipleShapes_LeftToRight"
+    macroData(6, 4)  = "選択した複数図形をLeft座標順に左から右へ連続接続する"
+    macroData(7, 1)  = "ユーティリティ" : macroData(7, 2)  = "フォント設定"
+    macroData(7, 3)  = "SetParagraphAndFont"
+    macroData(7, 4)  = "選択図形のフォント（Meiryo UI 9pt）と段落書式を一括適用する"
+    macroData(8, 1)  = "ユーティリティ" : macroData(8, 2)  = "列範囲選択"
+    macroData(8, 3)  = "SelectShapesInColumnRange"
+    macroData(8, 4)  = "InputBoxで指定した列範囲（例：BG〜BN）内の図形を一括選択する"
+    macroData(9, 1)  = "ユーティリティ" : macroData(9, 2)  = "接続線切替"
+    macroData(9, 3)  = "ToggleConnectorType"
+    macroData(9, 4)  = "選択したコネクタの種類を「直線」⇔「折れ線」で切り替える"
+    macroData(10, 1) = "ユーティリティ" : macroData(10, 2) = "テキスト注入"
+    macroData(10, 3) = "InjectTextFromList"
+    macroData(10, 4) = "定義シート（図形名 / テキスト）のリストから図形にテキストを一括設定する"
+    macroData(11, 1) = "ユーティリティ" : macroData(11, 2) = "連番命名"
+    macroData(11, 3) = "RenameShapesSequentially"
+    macroData(11, 4) = "シート上の図形をTop順に FLOW_{種別}_{001} 形式で連番命名する"
+
+    Dim mi As Long
+    For mi = 1 To 11
+        ws.Cells(r, 1).Value = macroData(mi, 1)
+        ws.Cells(r, 2).Value = macroData(mi, 2)
+        ws.Cells(r, 3).Value = macroData(mi, 3)
+        ws.Cells(r, 4).Value = macroData(mi, 4)
+        Dim mc As Long
+        For mc = 1 To 4
+            ws.Cells(r, mc).Font.Name = FONT_NAME
+            ws.Cells(r, mc).Font.Size = 9
+        Next mc
+        ws.Cells(r, 3).Font.Name = "Courier New"
+        ws.Cells(r, 4).WrapText = True
+        If mi Mod 2 = 0 Then
+            ws.Range("A" & r & ":D" & r).Interior.Color = CLR_ROW_ALT
+        End If
+        ws.Rows(r).RowHeight = 18
+        r = r + 1
+    Next mi
+    r = r + 1
+
+    ' =====================================================================
+    ' 【6】参考資料
+    ' =====================================================================
+    Call RmWriteSecHeader(ws, r, "■ 参考資料・ノウハウ", CLR_SEC_BG)
+    r = r + 1
+
+    Call RmWriteTblHeader(ws, r, Array("ファイル名", "内容", "", ""), CLR_TBL_HDR)
+    r = r + 1
+
+    ws.Range("A" & r & ":B" & r).Merge
+    ws.Cells(r, 1).Value = "docs\Excel標準機能-ノウハウ集-図形作成特化.html"
+    ws.Range("C" & r & ":D" & r).Merge
+    ws.Cells(r, 3).Value = "Excelの図形作成に関するノウハウ集。フロー図を作る際の標準操作・コツをまとめています。"
+    For mc = 1 To 4
+        ws.Cells(r, mc).Font.Name = FONT_NAME
+        ws.Cells(r, mc).Font.Size = 9
+    Next mc
+    ws.Cells(r, 1).Font.Name = "Courier New"
+    ws.Cells(r, 3).WrapText = True
+    ws.Rows(r).RowHeight = 18
+    r = r + 1
+
+    ' =====================================================================
+    ' 全体に外枠罫線を適用
+    ' =====================================================================
+    ws.Range("A1:D" & r - 1).Borders(xlEdgeTop).LineStyle    = xlContinuous
+    ws.Range("A1:D" & r - 1).Borders(xlEdgeBottom).LineStyle = xlContinuous
+    ws.Range("A1:D" & r - 1).Borders(xlEdgeLeft).LineStyle   = xlContinuous
+    ws.Range("A1:D" & r - 1).Borders(xlEdgeRight).LineStyle  = xlContinuous
+
+    ' シートを先頭に移動してA1を選択
+    ws.Activate
+    ws.Cells(1, 1).Select
+
+    MsgBox "README シートを生成しました。", vbInformation, "完了"
+
+End Sub
+
+
+'=============================================================================
+' Sub RmWriteSecHeader  【SetupReadmeSheet 専用ヘルパー・直接実行は非推奨】
+' 概要 : README シートのセクションヘッダー行を書き込む
+'=============================================================================
+Private Sub RmWriteSecHeader(ws As Worksheet, r As Long, title As String, bgColor As Long)
+
+    ws.Range("A" & r & ":D" & r).Merge
+    ws.Cells(r, 1).Value = title
+    With ws.Cells(r, 1)
+        .Font.Name = FONT_NAME
+        .Font.Size = 10
+        .Font.Bold = True
+        .Font.Color = 16777215   ' 白
+        .Interior.Color = bgColor
+        .HorizontalAlignment = xlLeft
+        .IndentLevel = 1
+    End With
+    ws.Rows(r).RowHeight = 20
+
+End Sub
+
+
+'=============================================================================
+' Sub RmWriteTblHeader  【SetupReadmeSheet 専用ヘルパー・直接実行は非推奨】
+' 概要 : README シートのテーブルヘッダー行を書き込む
+'=============================================================================
+Private Sub RmWriteTblHeader(ws As Worksheet, r As Long, _
+                              headers As Variant, bgColor As Long)
+    Dim i As Long
+    For i = 0 To UBound(headers)
+        ws.Cells(r, i + 1).Value = headers(i)
+        With ws.Cells(r, i + 1)
+            .Font.Name = FONT_NAME
+            .Font.Size = 9
+            .Font.Bold = True
+            .Font.Color = 16777215   ' 白
+            .Interior.Color = bgColor
+            .HorizontalAlignment = xlCenter
+        End With
+    Next i
+    ws.Rows(r).RowHeight = 18
 
 End Sub
 
