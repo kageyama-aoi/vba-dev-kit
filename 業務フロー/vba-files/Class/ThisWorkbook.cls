@@ -1060,7 +1060,7 @@ Sub SetupFlowButtons()
         End With
         With btn.TextFrame2
             .TextRange.Text = btnLabels(i)
-            .TextRange.Font.Color.RGB = RGB(TEXT_R, TEXT_G, TEXT_B)
+            .TextRange.Font.Fill.ForeColor.RGB = RGB(TEXT_R, TEXT_G, TEXT_B)
             .TextRange.Font.Size = 8
             .TextRange.Font.Name = FONT_NAME
             .VerticalAnchor = msoAnchorMiddle
@@ -1097,7 +1097,7 @@ Sub SetupFlowButtons()
         End With
         With btn.TextFrame2
             .TextRange.Text = btnLabels(i)
-            .TextRange.Font.Color.RGB = RGB(TEXT_R, TEXT_G, TEXT_B)
+            .TextRange.Font.Fill.ForeColor.RGB = RGB(TEXT_R, TEXT_G, TEXT_B)
             .TextRange.Font.Size = 8
             .TextRange.Font.Name = FONT_NAME
             .VerticalAnchor = msoAnchorMiddle
@@ -1169,7 +1169,7 @@ Sub SetupMacroBookButton()
     End With
     With btn.TextFrame2
         .TextRange.Text = "業務フローブックにボタンを配置"
-        .TextRange.Font.Color.RGB = RGB(255, 255, 255)
+        .TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
         .TextRange.Font.Size = 9
         .TextRange.Font.Name = FONT_NAME
         .VerticalAnchor = msoAnchorMiddle
@@ -1206,7 +1206,7 @@ Sub SetupMacroBookButton()
     End With
     With btnReadme.TextFrame2
         .TextRange.Text = "README シートを生成"
-        .TextRange.Font.Color.RGB = RGB(255, 255, 255)
+        .TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
         .TextRange.Font.Size = 9
         .TextRange.Font.Name = FONT_NAME
         .VerticalAnchor = msoAnchorMiddle
