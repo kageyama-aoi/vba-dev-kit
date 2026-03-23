@@ -1049,7 +1049,7 @@ Sub SetupFlowButtons()
             curLeft, curTop, BTN_W, BTN_H)
 
         btn.Name     = "BTN_FLOW_" & Format(i, "00")
-        btn.OnAction = "'" & macroBook & "'!" & macroNames(i)
+        btn.OnAction = "'" & macroBook & "'!ThisWorkbook." & macroNames(i)
 
         With btn.Fill
             .ForeColor.RGB = RGB(FILL_R, FILL_G, FILL_B)
@@ -1086,7 +1086,7 @@ Sub SetupFlowButtons()
             curLeft, curTop, BTN_W, BTN_H)
 
         btn.Name     = "BTN_FLOW_" & Format(i, "00")
-        btn.OnAction = "'" & macroBook & "'!" & macroNames(i)
+        btn.OnAction = "'" & macroBook & "'!ThisWorkbook." & macroNames(i)
 
         With btn.Fill
             .ForeColor.RGB = RGB(FILL_R, FILL_G, FILL_B)
@@ -1158,7 +1158,7 @@ Sub SetupMacroBookButton()
         btnLeft, btnTop, 190, 28)
 
     btn.Name     = "BTN_SETUP_FLOW"
-    btn.OnAction = "'" & ThisWorkbook.Name & "'!SetupFlowButtons"
+    btn.OnAction = "'" & ThisWorkbook.Name & "'!ThisWorkbook.SetupFlowButtons"
 
     With btn.Fill
         .ForeColor.RGB = RGB(34, 139, 34)
@@ -1194,7 +1194,7 @@ Sub SetupMacroBookButton()
         btnLeft, btnBottom, 190, 28)
 
     btnReadme.Name     = "BTN_SETUP_README"
-    btnReadme.OnAction = "'" & ThisWorkbook.Name & "'!SetupReadmeSheet"
+    btnReadme.OnAction = "'" & ThisWorkbook.Name & "'!ThisWorkbook.SetupReadmeSheet"
 
     With btnReadme.Fill
         .ForeColor.RGB = RGB(70, 130, 180)
