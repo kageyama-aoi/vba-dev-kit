@@ -181,6 +181,9 @@ Sub Flow_Process()
 
     Call FlowStyle(shp, "処理")
 
+    ws.Parent.Activate
+    ws.Activate
+
 End Sub
 
 
@@ -206,6 +209,9 @@ Sub Flow_Decision()
 
     Call FlowStyle(shp, "判断")
 
+    ws.Parent.Activate
+    ws.Activate
+
 End Sub
 
 
@@ -230,6 +236,9 @@ Sub Flow_StartEnd()
         Application.CentimetersToPoints(SE_HEIGHT_CM))
 
     Call FlowStyle(shp, "開始")
+
+    ws.Parent.Activate
+    ws.Activate
 
 End Sub
 
@@ -703,12 +712,14 @@ Sub SetParagraphAndFont()
     If Not LoadConfig() Then Exit Sub
 
     Dim shp As Shape
+    Dim cnt As Long
 
     If TypeName(Selection) <> "DrawingObjects" Then
         MsgBox "図形を選択してください", vbExclamation, "選択エラー"
         Exit Sub
     End If
 
+    cnt = 0
     For Each shp In Selection.ShapeRange
 
         If shp.TextFrame2.HasText Then
@@ -726,9 +737,14 @@ Sub SetParagraphAndFont()
                 .Size = FONT_SIZE
             End With
 
+            cnt = cnt + 1
+
         End If
 
     Next shp
+
+    Application.StatusBar = "フォント設定完了：" & cnt & " 件"
+    Application.OnTime Now + TimeValue("0:00:03"), "'" & ThisWorkbook.Name & "'!ThisWorkbook.ClearStatusBar"
 
 End Sub
 
@@ -764,11 +780,13 @@ Sub SelectShapesInColumnRange()
     Dim shp        As Shape
     Dim shpNames() As String
     Dim count      As Long
+    Dim row1Bottom As Double
 
     count = 0
+    row1Bottom = ws.Rows(1).Height
 
     For Each shp In ws.Shapes
-        If shp.Left >= startCol And shp.Left <= endCol Then
+        If shp.Left >= startCol And shp.Left <= endCol And shp.Top >= row1Bottom Then
             count = count + 1
             ReDim Preserve shpNames(1 To count)
             shpNames(count) = shp.Name
@@ -776,6 +794,8 @@ Sub SelectShapesInColumnRange()
     Next shp
 
     If count > 0 Then
+        ws.Parent.Activate
+        ws.Activate
         ws.Shapes.Range(shpNames).Select
     Else
         MsgBox "対象図形なし", vbInformation, "完了"
@@ -879,8 +899,11 @@ Sub InjectTextFromList()
         i = i + 1
     Loop
 
-    MsgBox hitCount & " 件の図形にテキストと書式を適用しました。", _
-           vbInformation, "完了"
+    Application.StatusBar = "テキスト注入完了：" & hitCount & " 件"
+    Application.OnTime Now + TimeValue("0:00:03"), "'" & ThisWorkbook.Name & "'!ThisWorkbook.ClearStatusBar"
+
+    ws.Parent.Activate
+    ws.Activate
 
 End Sub
 
@@ -917,11 +940,14 @@ Sub RenameShapesSequentially()
         Exit Sub
     End If
 
-    ' ボタン系を除外して収集
+    ' ボタン系・1行目を除外して収集
+    Dim row1Bottom As Double
+    row1Bottom = ws.Rows(1).Height
+
     n = 0
     Dim k As Long
     For k = 1 To ws.Shapes.count
-        If Not IsButtonShape(ws.Shapes(k)) Then
+        If Not IsButtonShape(ws.Shapes(k)) And ws.Shapes(k).Top >= row1Bottom Then
             n = n + 1
             ReDim Preserve arr(1 To n)
             Set arr(n) = ws.Shapes(k)
@@ -942,10 +968,14 @@ Sub RenameShapesSequentially()
         arr(i).Name = "FLOW_" & GetShapeKind(arr(i)) & "_" & Format(i, "000")
     Next i
 
-    MsgBox n & " 件の図形を連番で命名しました。", vbInformation, "完了"
+    Application.StatusBar = "連番命名完了：" & n & " 件"
+    Application.OnTime Now + TimeValue("0:00:03"), "'" & ThisWorkbook.Name & "'!ThisWorkbook.ClearStatusBar"
 
     ' --- 図形一覧シートに書き出す ---
     Call ExportShapeList(ws.Parent, arr, n)
+
+    ws.Parent.Activate
+    ws.Activate
 
 End Sub
 
@@ -1041,11 +1071,11 @@ Sub SetupFlowButtons()
     Dim curTop  As Double
     Dim btn     As Shape
 
-    ' --- 上段: ボタン 1〜6（図形配置系3 + 接続系3）---
+    ' --- 全11ボタンを横1行に配置 ---
     curLeft = startLeft
     curTop  = startTop
 
-    For i = 1 To 6
+    For i = 1 To 11
         Set btn = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
             curLeft, curTop, BTN_W, BTN_H)
 
@@ -1078,41 +1108,18 @@ Sub SetupFlowButtons()
         Set btn = Nothing
     Next i
 
-    ' --- 下段: ボタン 7〜11（ユーティリティ系）---
-    curLeft = startLeft
-    curTop  = startTop + BTN_H + ROW_GAP
-
-    For i = 7 To 11
-        Set btn = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
-            curLeft, curTop, BTN_W, BTN_H)
-
-        btn.Name     = "BTN_FLOW_" & Format(i, "00")
-        btn.OnAction = "'" & macroBook & "'!ThisWorkbook." & macroNames(i)
-
-        With btn.Fill
-            .ForeColor.RGB = RGB(FILL_R, FILL_G, FILL_B)
-        End With
-        With btn.Line
-            .ForeColor.RGB = RGB(LINE_R, LINE_G, LINE_B)
-            .Weight = 0.75
-        End With
-        With btn.TextFrame2
-            .TextRange.Text = btnLabels(i)
-            .TextRange.Font.Fill.ForeColor.RGB = RGB(TEXT_R, TEXT_G, TEXT_B)
-            .TextRange.Font.Size = 8
-            .TextRange.Font.Name = FONT_NAME
-            .VerticalAnchor = msoAnchorMiddle
-            .TextRange.ParagraphFormat.Alignment = msoAlignCenter
-        End With
-
-        curLeft = curLeft + BTN_W + BTN_GAP
-        Set btn = Nothing
-    Next i
-
     MsgBox "11個のボタンを「" & m_FlowSheet & "」シートの上部に配置しました。" & vbCrLf & _
            "マクロブック（" & macroBook & "）が開いている状態でクリックしてください。", _
            vbInformation, "ボタン配置完了"
 
+End Sub
+
+
+'=============================================================================
+' Sub ClearStatusBar  【OnTime 経由で呼び出し・直接実行は非推奨】
+'=============================================================================
+Sub ClearStatusBar()
+    Application.StatusBar = False
 End Sub
 
 

@@ -41,38 +41,48 @@
 - ボタン系は除外（リネーム対象外のため）
 - コネクタはテキストなしが通常のため C 列は空欄になることが多い
 
-#### 変更対象
-- `vba-files/Class/ThisWorkbook.cls`
-- 定数追加：`LIST_SHEET_NAME = "図形一覧"`
-- 関数変更：`RenameShapesSequentially`（書き出しロジックを末尾に追加）
+---
+
+### 3. フローシートへのボタン自動配置（実装済み）
+
+#### ボタンレイアウト（変更後：横1行並び）
+- 11個すべてを1行に横並び（幅60pt固定、はみ出しは許容）
+- グループ間隔（`‖`）は3番目と4番目の間に維持
+- ボタン幅60pt × 高さ22pt、フォント8pt（Meiryo UI）、文字色：黒
 
 ---
 
-### 3. フローシートへのボタン自動配置（#12）
+### 4. 完了アナウンス（ステータスバー表示）
 
-#### 概要
-`SetupFlowButtons` を実行すると、業務フローブックのフローシート（Config の「フローシート名」）上部に全11マクロの実行ボタンが配置される。
+以下3マクロの実行完了後、ステータスバーに処理結果を表示する。
 
-#### ボタンレイアウト
-| 行 | ボタン（左→右） |
+| マクロ | 表示内容（例） |
 |---|---|
-| 上段 | 処理 / 判断 / 開始-終了 ‖ 自動接続 / 縦連続接続 / 横連続接続 |
-| 下段 | フォント設定 / 列範囲選択 / 接続線切替 / テキスト注入 / 連番命名 |
+| `InjectTextFromList` | `テキスト注入完了：5件` |
+| `RenameShapesSequentially` | `連番命名完了：8件` |
+| `SetParagraphAndFont` | `フォント設定完了：3件` |
 
-- `‖` = グループ間隔（図形配置系と接続系の区切り）
-- ボタン幅60pt × 高さ22pt、フォント8pt（Meiryo UI）、色：青系 #4682B4
-- `OnAction = "'マクロブック名'!マクロ名"` を動的に設定
+- 表示時間：3秒後に自動消去（`Application.OnTime` で復元）
+- 表示中は他のステータスバーメッセージを上書きしない（処理後に `False` に戻す）
 
-#### SetupMacroBookButton
-- `ThisWorkbook` の Config シートに「業務フローブックにボタンを配置」ボタンを追加
-- `OnAction = "SetupFlowButtons"`
-- ボタン色：グリーン系（RGB 34,139,34）
-- 再実行時は既存ボタンを削除して再配置
+---
 
-#### 変更対象
-- `vba-files/Class/ThisWorkbook.cls`
-  - 追加: `SetupFlowButtons`（公開マクロ）
-  - 追加: `SetupMacroBookButton`（公開マクロ）
+### 5. 作業結果シートへの自動移動（全マクロ共通）
+
+- 全マクロ実行後、`GetTargetSheet` で取得した対象シートをアクティブにして移動する
+- 対象ブックが現在のアクティブブックと異なる場合のみ移動（同一ブックは移動不要）
+
+---
+
+### 6. 1行目除外（RenameShapesSequentially・SelectShapesInColumnRange）
+
+#### RenameShapesSequentially
+- Top 座標が1行目のセル下端（`ws.Rows(1).Height`）以内の図形はリネーム対象外
+
+#### SelectShapesInColumnRange
+- Top 座標が1行目のセル下端以内の図形は選択対象外
+
+---
 
 ## 非機能要件
 - `図形一覧` シートは操作対象ブック（`targetWb`）内に作成する
