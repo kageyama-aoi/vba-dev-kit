@@ -1055,16 +1055,12 @@ Sub SetupFlowButtons()
     Dim macroBook As String
     macroBook = ThisWorkbook.Name
 
-    ' --- ボタン色定数 ---
-    Const FILL_R As Long = 70
-    Const FILL_G As Long = 130
-    Const FILL_B As Long = 180
-    Const LINE_R As Long = 30
-    Const LINE_G As Long = 90
-    Const LINE_B As Long = 140
-    Const TEXT_R As Long = 0
-    Const TEXT_G As Long = 0
-    Const TEXT_B As Long = 0
+    ' --- グループ別ボタン色（Fill / Line）---
+    '   i=1〜3  : 図形配置系 … 緑
+    '   i=4〜6  : 接続系     … 青
+    '   i=7〜11 : ユーティリティ系 … オレンジ
+    Dim fillRGB As Long
+    Dim lineRGB As Long
 
     Dim i       As Long
     Dim curLeft As Double
@@ -1076,6 +1072,19 @@ Sub SetupFlowButtons()
     curTop  = startTop
 
     For i = 1 To 11
+
+        ' グループ判定
+        If i <= 3 Then
+            fillRGB = RGB(46, 139, 87)      ' 緑（図形配置系）
+            lineRGB = RGB(30, 100, 60)
+        ElseIf i <= 6 Then
+            fillRGB = RGB(70, 130, 180)     ' 青（接続系）
+            lineRGB = RGB(30, 90, 140)
+        Else
+            fillRGB = RGB(205, 92, 50)      ' オレンジ（ユーティリティ系）
+            lineRGB = RGB(160, 65, 30)
+        End If
+
         Set btn = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
             curLeft, curTop, BTN_W, BTN_H)
 
@@ -1083,15 +1092,15 @@ Sub SetupFlowButtons()
         btn.OnAction = "'" & macroBook & "'!ThisWorkbook." & macroNames(i)
 
         With btn.Fill
-            .ForeColor.RGB = RGB(FILL_R, FILL_G, FILL_B)
+            .ForeColor.RGB = fillRGB
         End With
         With btn.Line
-            .ForeColor.RGB = RGB(LINE_R, LINE_G, LINE_B)
+            .ForeColor.RGB = lineRGB
             .Weight = 0.75
         End With
         With btn.TextFrame2
             .TextRange.Text = btnLabels(i)
-            .TextRange.Font.Fill.ForeColor.RGB = RGB(TEXT_R, TEXT_G, TEXT_B)
+            .TextRange.Font.Fill.ForeColor.RGB = RGB(0, 0, 0)
             .TextRange.Font.Size = 8
             .TextRange.Font.Name = FONT_NAME
             .VerticalAnchor = msoAnchorMiddle
