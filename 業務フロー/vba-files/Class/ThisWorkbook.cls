@@ -1329,7 +1329,8 @@ Sub SetupReadmeSheet()
     ws.Range("A" & r & ":D" & r).Merge
     ws.Cells(r, 1).Value = _
         "このExcelマクロブックは、業務フロー図の作成を補助するツールです。" & _
-        "図形の配置・接続・命名・テキスト挿入など、手作業では手間のかかる操作をワンクリックで実行できます。"
+        "図形の配置・接続・命名・テキスト挿入など、手作業では手間のかかる操作をワンクリックで実行できます。" & _
+        "操作ボタンはフローシート上部に3色で色分けされています：緑＝図形配置系 ／ 青＝接続系 ／ オレンジ＝ユーティリティ系"
     With ws.Cells(r, 1)
         .Font.Name = FONT_NAME
         .Font.Size = 9
@@ -1370,13 +1371,13 @@ Sub SetupReadmeSheet()
     setupData(2, 3) = "「対象ブックキーワード」「フローシート名」等を確認・変更する"
     setupData(3, 1) = "3"
     setupData(3, 2) = "Alt+F8 → SetupMacroBookButton → 実行"
-    setupData(3, 3) = "Config シートに緑のボタンが追加される（初回1回のみ）"
+    setupData(3, 3) = "Config シートに緑ボタン（ボタン配置）と青ボタン（README生成）が追加される（初回1回のみ）"
     setupData(4, 1) = "4"
     setupData(4, 2) = "業務フローブックを開く"
     setupData(4, 3) = "ファイル名に Config の「対象ブックキーワード」を含むこと"
     setupData(5, 1) = "5"
     setupData(5, 2) = "Config シートの緑ボタンをクリック"
-    setupData(5, 3) = "フローシートの上部に操作ボタンが11個配置される"
+    setupData(5, 3) = "フローシートの上部に操作ボタン11個が色分けされて1行に配置される"
 
     Dim si As Long
     For si = 1 To 5
@@ -1413,7 +1414,7 @@ Sub SetupReadmeSheet()
     flowData(3, 1) = "複数図形を一括接続"
     flowData(3, 2) = "縦に並んだ図形を選択 →「縦連続接続」、横に並んだ場合は「横連続接続」"
     flowData(4, 1) = "図形に名前をつける"
-    flowData(4, 2) = "フローシートで全図形を選択（Ctrl+A）→「連番命名」で FLOW_Process_001 形式に命名"
+    flowData(4, 2) = "フローシートで2行目以降の図形を選択 →「連番命名」で FLOW_Process_001 形式に命名（1行目のボタンは除外される）"
     flowData(5, 1) = "テキストを一括入力"
     flowData(5, 2) = "定義シート（A列：図形名 / B列：テキスト）を埋めて →「テキスト注入」を実行"
     flowData(6, 1) = "書式を統一する"
@@ -1456,39 +1457,39 @@ Sub SetupReadmeSheet()
     r = r + 1
 
     Dim macroData(1 To 11, 1 To 4) As String
-    macroData(1, 1)  = "図形配置"  : macroData(1, 2)  = "処理"
+    macroData(1, 1)  = "🟢 図形配置系" : macroData(1, 2)  = "処理"
     macroData(1, 3)  = "Flow_Process"
     macroData(1, 4)  = "矩形（処理ボックス）を選択セル位置に配置する"
-    macroData(2, 1)  = "図形配置"  : macroData(2, 2)  = "判断"
+    macroData(2, 1)  = "🟢 図形配置系" : macroData(2, 2)  = "判断"
     macroData(2, 3)  = "Flow_Decision"
     macroData(2, 4)  = "菱形（判断ボックス）を選択セル位置に配置する"
-    macroData(3, 1)  = "図形配置"  : macroData(3, 2)  = "開始/終了"
+    macroData(3, 1)  = "🟢 図形配置系" : macroData(3, 2)  = "開始/終了"
     macroData(3, 3)  = "Flow_StartEnd"
     macroData(3, 4)  = "角丸矩形（開始/終了）を選択セル位置に配置する"
-    macroData(4, 1)  = "接続"      : macroData(4, 2)  = "自動接続"
+    macroData(4, 1)  = "🔵 接続系"    : macroData(4, 2)  = "自動接続"
     macroData(4, 3)  = "ConnectSelectedShapes_Auto"
     macroData(4, 4)  = "選択した2図形を位置関係（縦/横）で自動判定して矢印接続する"
-    macroData(5, 1)  = "接続"      : macroData(5, 2)  = "縦連続接続"
+    macroData(5, 1)  = "🔵 接続系"    : macroData(5, 2)  = "縦連続接続"
     macroData(5, 3)  = "ConnectMultipleShapes_TopToBottom"
     macroData(5, 4)  = "選択した複数図形をTop座標順に上から下へ連続接続する"
-    macroData(6, 1)  = "接続"      : macroData(6, 2)  = "横連続接続"
+    macroData(6, 1)  = "🔵 接続系"    : macroData(6, 2)  = "横連続接続"
     macroData(6, 3)  = "ConnectMultipleShapes_LeftToRight"
     macroData(6, 4)  = "選択した複数図形をLeft座標順に左から右へ連続接続する"
-    macroData(7, 1)  = "ユーティリティ" : macroData(7, 2)  = "フォント設定"
+    macroData(7, 1)  = "🟠 ユーティリティ系" : macroData(7, 2)  = "フォント設定"
     macroData(7, 3)  = "SetParagraphAndFont"
     macroData(7, 4)  = "選択図形のフォント（Meiryo UI 9pt）と段落書式を一括適用する"
-    macroData(8, 1)  = "ユーティリティ" : macroData(8, 2)  = "列範囲選択"
+    macroData(8, 1)  = "🟠 ユーティリティ系" : macroData(8, 2)  = "列範囲選択"
     macroData(8, 3)  = "SelectShapesInColumnRange"
-    macroData(8, 4)  = "InputBoxで指定した列範囲（例：BG〜BN）内の図形を一括選択する"
-    macroData(9, 1)  = "ユーティリティ" : macroData(9, 2)  = "接続線切替"
+    macroData(8, 4)  = "InputBoxで指定した列範囲（例：BG〜BN）内の図形を一括選択する（1行目除外）"
+    macroData(9, 1)  = "🟠 ユーティリティ系" : macroData(9, 2)  = "接続線切替"
     macroData(9, 3)  = "ToggleConnectorType"
     macroData(9, 4)  = "選択したコネクタの種類を「直線」⇔「折れ線」で切り替える"
-    macroData(10, 1) = "ユーティリティ" : macroData(10, 2) = "テキスト注入"
+    macroData(10, 1) = "🟠 ユーティリティ系" : macroData(10, 2) = "テキスト注入"
     macroData(10, 3) = "InjectTextFromList"
     macroData(10, 4) = "定義シート（図形名 / テキスト）のリストから図形にテキストを一括設定する"
-    macroData(11, 1) = "ユーティリティ" : macroData(11, 2) = "連番命名"
+    macroData(11, 1) = "🟠 ユーティリティ系" : macroData(11, 2) = "連番命名"
     macroData(11, 3) = "RenameShapesSequentially"
-    macroData(11, 4) = "シート上の図形をTop順に FLOW_{種別}_{001} 形式で連番命名する"
+    macroData(11, 4) = "シート上の図形をTop順に FLOW_{種別}_{001} 形式で連番命名する（1行目除外）"
 
     Dim mi As Long
     For mi = 1 To 11
