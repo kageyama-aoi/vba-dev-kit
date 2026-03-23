@@ -1100,7 +1100,7 @@ Sub SetupFlowButtons()
         End With
         With btn.TextFrame2
             .TextRange.Text = btnLabels(i)
-            .TextRange.Font.Fill.ForeColor.RGB = RGB(0, 0, 0)
+            .TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
             .TextRange.Font.Size = 8
             .TextRange.Font.Name = FONT_NAME
             .VerticalAnchor = msoAnchorMiddle
