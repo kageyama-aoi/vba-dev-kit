@@ -1158,7 +1158,7 @@ Sub SetupMacroBookButton()
         btnLeft, btnTop, 190, 28)
 
     btn.Name     = "BTN_SETUP_FLOW"
-    btn.OnAction = "SetupFlowButtons"
+    btn.OnAction = "'" & ThisWorkbook.Name & "'!SetupFlowButtons"
 
     With btn.Fill
         .ForeColor.RGB = RGB(34, 139, 34)
@@ -1176,9 +1176,12 @@ Sub SetupMacroBookButton()
         .TextRange.ParagraphFormat.Alignment = msoAlignCenter
     End With
 
+    ' --- README 生成ボタンも追加（緑ボタンの直下に配置）---
+    Dim btnBottom As Double
+    btnBottom = btnTop + 28 + 8   ' 緑ボタンの下端 + 間隔
+
     Set btn = Nothing
 
-    ' --- README 生成ボタンも追加 ---
     Dim btnReadme As Shape
     For Each shp In ws.Shapes
         If shp.Name = "BTN_SETUP_README" Then
@@ -1187,15 +1190,11 @@ Sub SetupMacroBookButton()
         End If
     Next shp
 
-    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
-    btnLeft = ws.Cells(lastRow + 2, 1).Left + 5
-    btnTop  = ws.Cells(lastRow + 2, 1).Top  + 3
-
     Set btnReadme = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
-        btnLeft, btnTop, 190, 28)
+        btnLeft, btnBottom, 190, 28)
 
     btnReadme.Name     = "BTN_SETUP_README"
-    btnReadme.OnAction = "SetupReadmeSheet"
+    btnReadme.OnAction = "'" & ThisWorkbook.Name & "'!SetupReadmeSheet"
 
     With btnReadme.Fill
         .ForeColor.RGB = RGB(70, 130, 180)
