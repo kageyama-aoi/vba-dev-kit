@@ -252,6 +252,7 @@ Sub FlowStyle(shp As Shape, txt As String)
             .TextRange.Font.NameFarEast = FONT_NAME
             .TextRange.Font.NameAscii = FONT_NAME
             .TextRange.Font.Size = FONT_SIZE
+            .TextRange.Font.Fill.ForeColor.RGB = RGB(0, 0, 0)
             .VerticalAnchor = msoAnchorMiddle
             .TextRange.ParagraphFormat.Alignment = msoAlignCenter
             .TextRange.Text = txt
