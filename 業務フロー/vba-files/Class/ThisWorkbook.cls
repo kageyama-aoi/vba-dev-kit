@@ -1031,9 +1031,9 @@ Sub SetupFlowButtons()
     Const LINE_R As Long = 30
     Const LINE_G As Long = 90
     Const LINE_B As Long = 140
-    Const TEXT_R As Long = 255
-    Const TEXT_G As Long = 255
-    Const TEXT_B As Long = 255
+    Const TEXT_R As Long = 0
+    Const TEXT_G As Long = 0
+    Const TEXT_B As Long = 0
 
     Dim i       As Long
     Dim curLeft As Double
