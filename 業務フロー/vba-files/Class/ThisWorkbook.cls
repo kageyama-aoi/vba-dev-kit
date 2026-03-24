@@ -236,7 +236,7 @@ End Sub
 '=============================================================================
 ' Sub FlowStyle
 '=============================================================================
-Sub FlowStyle(shp As Shape, txt As String)
+Sub FlowStyle(shp As Shape, Optional txt As String = "")
 
     If shp.Connector Then Exit Sub
 
