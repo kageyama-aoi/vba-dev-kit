@@ -96,6 +96,9 @@ Attribute VB_Exposed = True
 '   v4.3  RenameShapesSequentially でボタン系図形（フォームコントロール/ActiveX）を除外
 '   v5.0  SetupFlowButtons / SetupMacroBookButton 追加（フローシートへのボタン自動配置）
 '   v5.1  SetupReadmeSheet 追加（README シート自動生成）
+'   v5.2  リファクタリング：重複コード除去・共通ヘルパー整理（#21）
+'         Flow_AddShape 追加 / ConnectTwoShapes 統合 / DeleteShapeByName 追加
+'         LoadConfig のシート確認を1回に集約 / SortShapesByAxis の Dim をループ外へ移動
 '=============================================================================
 
 Option Explicit
@@ -163,27 +166,7 @@ Private Const CP_LEFT   As Long = 4
 ' Sub Flow_Process
 '=============================================================================
 Sub Flow_Process()
-
-    If Not LoadConfig() Then Exit Sub
-
-    Dim ws  As Worksheet
-    Dim shp As Shape
-
-    Set ws = GetTargetSheet(m_FlowSheet)
-    If ws Is Nothing Then Exit Sub
-
-    Set shp = ws.Shapes.AddShape( _
-        msoShapeRectangle, _
-        Selection.Left, _
-        Selection.Top, _
-        Application.CentimetersToPoints(SHAPE_WIDTH_CM), _
-        Application.CentimetersToPoints(SHAPE_HEIGHT_CM))
-
-    Call FlowStyle(shp, "処理")
-
-    ws.Parent.Activate
-    ws.Activate
-
+    Call Flow_AddShape(msoShapeRectangle, SHAPE_WIDTH_CM, SHAPE_HEIGHT_CM, "処理")
 End Sub
 
 
@@ -191,27 +174,7 @@ End Sub
 ' Sub Flow_Decision
 '=============================================================================
 Sub Flow_Decision()
-
-    If Not LoadConfig() Then Exit Sub
-
-    Dim ws  As Worksheet
-    Dim shp As Shape
-
-    Set ws = GetTargetSheet(m_FlowSheet)
-    If ws Is Nothing Then Exit Sub
-
-    Set shp = ws.Shapes.AddShape( _
-        msoShapeDiamond, _
-        Selection.Left, _
-        Selection.Top, _
-        Application.CentimetersToPoints(SHAPE_WIDTH_CM), _
-        Application.CentimetersToPoints(SHAPE_HEIGHT_CM))
-
-    Call FlowStyle(shp, "判断")
-
-    ws.Parent.Activate
-    ws.Activate
-
+    Call Flow_AddShape(msoShapeDiamond, SHAPE_WIDTH_CM, SHAPE_HEIGHT_CM, "判断")
 End Sub
 
 
@@ -219,6 +182,19 @@ End Sub
 ' Sub Flow_StartEnd
 '=============================================================================
 Sub Flow_StartEnd()
+    Call Flow_AddShape(msoShapeRoundedRectangle, SE_WIDTH_CM, SE_HEIGHT_CM, "開始")
+End Sub
+
+
+'=============================================================================
+' Sub Flow_AddShape  【内部ヘルパー・直接実行は非推奨】
+' 概要 : 指定した種類・サイズのフロー図形を選択セル位置に配置して FlowStyle を適用する
+' 引数 : shapeType … msoAutoShapeType 定数（msoShapeRectangle 等）
+'         widthCm   … 図形幅（センチメートル）
+'         heightCm  … 図形高さ（センチメートル）
+'         label     … 図形に設定するテキスト
+'=============================================================================
+Private Sub Flow_AddShape(shapeType As Long, widthCm As Double, heightCm As Double, label As String)
 
     If Not LoadConfig() Then Exit Sub
 
@@ -229,13 +205,13 @@ Sub Flow_StartEnd()
     If ws Is Nothing Then Exit Sub
 
     Set shp = ws.Shapes.AddShape( _
-        msoShapeRoundedRectangle, _
+        shapeType, _
         Selection.Left, _
         Selection.Top, _
-        Application.CentimetersToPoints(SE_WIDTH_CM), _
-        Application.CentimetersToPoints(SE_HEIGHT_CM))
+        Application.CentimetersToPoints(widthCm), _
+        Application.CentimetersToPoints(heightCm))
 
-    Call FlowStyle(shp, "開始")
+    Call FlowStyle(shp, label)
 
     ws.Parent.Activate
     ws.Activate
@@ -389,33 +365,7 @@ Private Function LoadConfig() As Boolean
 
     LoadConfig = False
 
-    m_Keyword   = GetConfigValue("対象ブックキーワード")
-    If m_Keyword = "" Then Exit Function
-
-    m_FlowSheet = GetConfigValue("フローシート名")
-    If m_FlowSheet = "" Then Exit Function
-
-    m_DefSheet  = GetConfigValue("定義シート名")
-    If m_DefSheet = "" Then Exit Function
-
-    m_ListSheet = GetConfigValue("一覧シート名")
-    If m_ListSheet = "" Then Exit Function
-
-    LoadConfig = True
-
-End Function
-
-
-'=============================================================================
-' Function GetConfigValue  【内部ヘルパー・直接実行は非推奨】
-' 概要 : Config シートから指定キーの値を返す
-'        シートが存在しない / キーが見つからない / 値が空の場合はエラー表示して "" を返す
-'=============================================================================
-Private Function GetConfigValue(key As String) As String
-
-    GetConfigValue = ""
-
-    ' Config シートの存在確認
+    ' Config シートの存在確認（1回のみ）
     Dim wsConfig As Worksheet
     On Error Resume Next
     Set wsConfig = ThisWorkbook.Worksheets(CONFIG_SHEET_NAME)
@@ -427,6 +377,34 @@ Private Function GetConfigValue(key As String) As String
                vbExclamation, "設定エラー"
         Exit Function
     End If
+
+    m_Keyword   = GetConfigValue("対象ブックキーワード", wsConfig)
+    If m_Keyword = "" Then Exit Function
+
+    m_FlowSheet = GetConfigValue("フローシート名", wsConfig)
+    If m_FlowSheet = "" Then Exit Function
+
+    m_DefSheet  = GetConfigValue("定義シート名", wsConfig)
+    If m_DefSheet = "" Then Exit Function
+
+    m_ListSheet = GetConfigValue("一覧シート名", wsConfig)
+    If m_ListSheet = "" Then Exit Function
+
+    LoadConfig = True
+
+End Function
+
+
+'=============================================================================
+' Function GetConfigValue  【内部ヘルパー・直接実行は非推奨】
+' 概要 : Config シートから指定キーの値を返す
+'        キーが見つからない / 値が空の場合はエラー表示して "" を返す
+' 引数 : key      … 設定名（A列に記載された文字列）
+'         wsConfig … Config シートオブジェクト（LoadConfig から渡す）
+'=============================================================================
+Private Function GetConfigValue(key As String, wsConfig As Worksheet) As String
+
+    GetConfigValue = ""
 
     ' A列でキーを検索（2行目以降）
     Dim i   As Long
@@ -557,10 +535,11 @@ Private Sub SortShapesByAxis(arr() As Shape, n As Long, axis As String)
     Dim j   As Long
     Dim tmp As Shape
 
+    Dim v1 As Double
+    Dim v2 As Double
+
     For i = 1 To n - 1
         For j = i + 1 To n
-            Dim v1 As Double
-            Dim v2 As Double
             If axis = "Top" Then
                 v1 = arr(i).Top
                 v2 = arr(j).Top
@@ -645,9 +624,14 @@ End Function
 
 
 '=============================================================================
-' Sub ConnectTwoShapes_Vertical  【内部ヘルパー・直接実行は非推奨】
+' Sub ConnectTwoShapes  【内部ヘルパー・直接実行は非推奨】
+' 概要 : 2 図形をコネクタで接続する（接続ポイントを引数で指定）
+' 引数 : shp1   … 接続元図形
+'         shp2   … 接続先図形
+'         fromCP … 接続元の接続ポイント番号（上=1 / 右=2 / 下=3 / 左=4）
+'         toCP   … 接続先の接続ポイント番号
 '=============================================================================
-Private Sub ConnectTwoShapes_Vertical(shp1 As Shape, shp2 As Shape)
+Private Sub ConnectTwoShapes(shp1 As Shape, shp2 As Shape, fromCP As Long, toCP As Long)
 
     Dim ws   As Worksheet
     Dim conn As Shape
@@ -662,8 +646,8 @@ Private Sub ConnectTwoShapes_Vertical(shp1 As Shape, shp2 As Shape)
         .Line.Weight = CONN_WEIGHT
         .Line.EndArrowheadStyle = msoArrowheadTriangle
 
-        .ConnectorFormat.BeginConnect shp1, CP_BOTTOM
-        .ConnectorFormat.EndConnect shp2, CP_TOP
+        .ConnectorFormat.BeginConnect shp1, fromCP
+        .ConnectorFormat.EndConnect shp2, toCP
 
         .RerouteConnections
     End With
@@ -672,29 +656,18 @@ End Sub
 
 
 '=============================================================================
-' Sub ConnectTwoShapes_Horizontal  【内部ヘルパー・直接実行は非推奨】
+' Sub ConnectTwoShapes_Vertical  【ConnectTwoShapes のラッパー・直接実行は非推奨】
+'=============================================================================
+Private Sub ConnectTwoShapes_Vertical(shp1 As Shape, shp2 As Shape)
+    Call ConnectTwoShapes(shp1, shp2, CP_BOTTOM, CP_TOP)
+End Sub
+
+
+'=============================================================================
+' Sub ConnectTwoShapes_Horizontal  【ConnectTwoShapes のラッパー・直接実行は非推奨】
 '=============================================================================
 Private Sub ConnectTwoShapes_Horizontal(shp1 As Shape, shp2 As Shape)
-
-    Dim ws   As Worksheet
-    Dim conn As Shape
-
-    Set ws = GetTargetSheet(m_FlowSheet)
-    If ws Is Nothing Then Exit Sub
-
-    Set conn = ws.Shapes.AddConnector(msoConnectorStraight, 0, 0, 0, 0)
-
-    With conn
-        .Line.ForeColor.RGB = RGB(CONN_R, CONN_G, CONN_B)
-        .Line.Weight = CONN_WEIGHT
-        .Line.EndArrowheadStyle = msoArrowheadTriangle
-
-        .ConnectorFormat.BeginConnect shp1, CP_RIGHT
-        .ConnectorFormat.EndConnect shp2, CP_LEFT
-
-        .RerouteConnections
-    End With
-
+    Call ConnectTwoShapes(shp1, shp2, CP_RIGHT, CP_LEFT)
 End Sub
 
 
@@ -929,8 +902,7 @@ Sub RenameShapesSequentially()
     Dim ws  As Worksheet
     Dim arr() As Shape
     Dim n   As Long
-    Dim i   As Long, j As Long
-    Dim tmp As Shape
+    Dim i   As Long
 
     Set ws = GetTargetSheet(m_FlowSheet)
     If ws Is Nothing Then Exit Sub
@@ -955,13 +927,7 @@ Sub RenameShapesSequentially()
     Next k
 
     ' Top 座標順にソート
-    For i = 1 To n - 1
-        For j = i + 1 To n
-            If arr(i).Top > arr(j).Top Then
-                Set tmp = arr(i): Set arr(i) = arr(j): Set arr(j) = tmp
-            End If
-        Next j
-    Next i
+    Call SortShapesByAxis(arr, n, "Top")
 
     ' 種別を判定して通し番号で命名
     For i = 1 To n
@@ -1153,13 +1119,8 @@ Sub SetupMacroBookButton()
     End If
 
     ' --- 既存ボタンを削除 ---
-    Dim shp As Shape
-    For Each shp In ws.Shapes
-        If shp.Name = "BTN_SETUP_FLOW" Then
-            shp.Delete
-            Exit For
-        End If
-    Next shp
+    Call DeleteShapeByName(ws, "BTN_SETUP_FLOW")
+    Call DeleteShapeByName(ws, "BTN_SETUP_README")
 
     ' --- Config シートの設定行の下に配置 ---
     Dim lastRow As Long
@@ -1178,10 +1139,10 @@ Sub SetupMacroBookButton()
     btn.OnAction = "'" & ThisWorkbook.Name & "'!ThisWorkbook.SetupFlowButtons"
 
     With btn.Fill
-        .ForeColor.RGB = RGB(34, 139, 34)
+        .ForeColor.RGB = RGB(46, 139, 87)
     End With
     With btn.Line
-        .ForeColor.RGB = RGB(0, 100, 0)
+        .ForeColor.RGB = RGB(30, 100, 60)
         .Weight = 0.75
     End With
     With btn.TextFrame2
@@ -1200,12 +1161,6 @@ Sub SetupMacroBookButton()
     Set btn = Nothing
 
     Dim btnReadme As Shape
-    For Each shp In ws.Shapes
-        If shp.Name = "BTN_SETUP_README" Then
-            shp.Delete
-            Exit For
-        End If
-    Next shp
 
     Set btnReadme = ws.Shapes.AddShape(msoShapeRoundedRectangle, _
         btnLeft, btnBottom, 190, 28)
@@ -1699,3 +1654,22 @@ Private Function LeftToColLetter(ws As Worksheet, leftPt As Double) As String
     LeftToColLetter = Split(ws.Cells(1, c).Address(True, False), "$")(0)
 
 End Function
+
+
+'=============================================================================
+' Sub DeleteShapeByName  【内部ヘルパー・直接実行は非推奨】
+' 概要 : 指定した名前のシェイプをワークシートから削除する（存在しない場合は何もしない）
+' 引数 : ws        … 対象ワークシート
+'         shapeName … 削除するシェイプ名
+'=============================================================================
+Private Sub DeleteShapeByName(ws As Worksheet, shapeName As String)
+
+    Dim shp As Shape
+    For Each shp In ws.Shapes
+        If shp.Name = shapeName Then
+            shp.Delete
+            Exit For
+        End If
+    Next shp
+
+End Sub
