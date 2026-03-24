@@ -104,6 +104,12 @@ Attribute VB_Exposed = True
 '         GetTargetSheet の CLng クラッシュを IsNumeric チェックで防止
 '         RenameShapesSequentially の n=0 時に原因メッセージを追加
 '         RunDiagnostics マクロを追加（設定確認・動作テスト用）
+'   v5.4  GenerateFlowFromSheet 追加（定義シートからフロー図を自動生成）(#23)
+'         ExportFlowData 追加（図形・接続情報を一覧シート＋CSV に書き出し）(#24)
+'         ConnectAutoByPosition 追加（位置判定ロジックを ConnectSelectedShapes_Auto から抽出）
+'         ExportShapeList 拡張（F/G 列：接続先1/2 追加）
+'         SetupFlowButtons 更新（11→13 ボタン）
+'         SetupReadmeSheet 更新（11→13 マクロ一覧）
 '=============================================================================
 
 Option Explicit
@@ -275,32 +281,7 @@ Sub ConnectSelectedShapes_Auto()
     Set shp1 = Selection.ShapeRange(1)
     Set shp2 = Selection.ShapeRange(2)
 
-    Dim cx1 As Double, cy1 As Double
-    Dim cx2 As Double, cy2 As Double
-
-    cx1 = shp1.Left + shp1.Width / 2
-    cy1 = shp1.Top + shp1.Height / 2
-    cx2 = shp2.Left + shp2.Width / 2
-    cy2 = shp2.Top + shp2.Height / 2
-
-    Dim dx As Double
-    Dim dy As Double
-    dx = cx1 - cx2
-    dy = cy1 - cy2
-
-    If Abs(dx) > Abs(dy) Then
-        If dx < 0 Then
-            Call ConnectTwoShapes_Horizontal(shp1, shp2)
-        Else
-            Call ConnectTwoShapes_Horizontal(shp2, shp1)
-        End If
-    Else
-        If dy < 0 Then
-            Call ConnectTwoShapes_Vertical(shp1, shp2)
-        Else
-            Call ConnectTwoShapes_Vertical(shp2, shp1)
-        End If
-    End If
+    Call ConnectAutoByPosition(shp1, shp2)
 
 End Sub
 
@@ -345,6 +326,275 @@ Sub ConnectMultipleShapes_LeftToRight()
     For i = 1 To n - 1
         Call ConnectTwoShapes_Horizontal(arr(i), arr(i + 1))
     Next i
+
+End Sub
+
+
+'=============================================================================
+' Sub GenerateFlowFromSheet
+' 概要 : 定義シートの内容をもとに、フローシートへ図形の配置・命名・接続を一括実行する
+'
+' 定義シートの形式（A〜E列）：
+'   A列 … 図形名（命名に使用）
+'   B列 … テキスト（図形内に表示）
+'   C列 … 種別（処理 / 判断 / 開始終了）
+'   D列 … 接続先(YES)（次の図形名または単純な次）
+'   E列 … 接続先(NO)（判断の「いいえ」接続先）
+'=============================================================================
+Sub GenerateFlowFromSheet()
+
+    If Not LoadConfig() Then Exit Sub
+
+    ' --- 対象ブック・シート取得 ---
+    Dim ws    As Worksheet
+    Dim wsDef As Worksheet
+
+    Set ws = GetTargetSheet(m_FlowSheet)
+    If ws Is Nothing Then Exit Sub
+
+    Dim targetWb As Workbook
+    Set targetWb = ws.Parent
+
+    On Error Resume Next
+    Set wsDef = targetWb.Worksheets(m_DefSheet)
+    On Error GoTo 0
+    If wsDef Is Nothing Then
+        MsgBox "「" & m_DefSheet & "」シートが見つかりません。", vbExclamation, "エラー"
+        Exit Sub
+    End If
+
+    ' T2: 既存図形の確認（ボタン・1行目除外）
+    Dim shp     As Shape
+    Dim row1H   As Double
+    Dim exCount As Long
+    row1H   = ws.Rows(1).Height
+    exCount = 0
+    For Each shp In ws.Shapes
+        If Not IsButtonShape(shp) And shp.Top >= row1H Then
+            exCount = exCount + 1
+        End If
+    Next shp
+
+    If exCount > 0 Then
+        Dim dlgAns As VbMsgBoxResult
+        dlgAns = MsgBox("フローシートに既存の図形が " & exCount & " 個あります。" & vbCrLf & _
+                        "クリアして再生成しますか？", _
+                        vbYesNo + vbExclamation, "既存図形の確認")
+        If dlgAns <> vbYes Then Exit Sub
+
+        ' ユーザーが「はい」→ 対象図形を全削除
+        Dim toDelete() As String
+        Dim delCount   As Long
+        delCount = 0
+        For Each shp In ws.Shapes
+            If Not IsButtonShape(shp) And shp.Top >= row1H Then
+                delCount = delCount + 1
+                ReDim Preserve toDelete(1 To delCount)
+                toDelete(delCount) = shp.Name
+            End If
+        Next shp
+        Dim di As Long
+        For di = 1 To delCount
+            ws.Shapes(toDelete(di)).Delete
+        Next di
+    End If
+
+    ' T1: 定義シートの読み込み（2行目から、A列が空になったら終了）
+    Dim rowIdx   As Long
+    Dim defNames() As String
+    Dim defTexts() As String
+    Dim defKinds() As String
+    Dim defYes()   As String
+    Dim defNo()    As String
+    Dim defCount   As Long
+
+    rowIdx   = 2   ' 1行目はヘッダー
+    defCount = 0
+
+    Do While wsDef.Cells(rowIdx, 1).Value <> ""
+        defCount = defCount + 1
+        ReDim Preserve defNames(1 To defCount)
+        ReDim Preserve defTexts(1 To defCount)
+        ReDim Preserve defKinds(1 To defCount)
+        ReDim Preserve defYes(1 To defCount)
+        ReDim Preserve defNo(1 To defCount)
+        defNames(defCount) = CStr(wsDef.Cells(rowIdx, 1).Value)
+        defTexts(defCount) = CStr(wsDef.Cells(rowIdx, 2).Value)
+        defKinds(defCount) = CStr(wsDef.Cells(rowIdx, 3).Value)
+        defYes(defCount)   = CStr(wsDef.Cells(rowIdx, 4).Value)
+        defNo(defCount)    = CStr(wsDef.Cells(rowIdx, 5).Value)
+        rowIdx = rowIdx + 1
+    Loop
+
+    If defCount = 0 Then
+        MsgBox "定義シートに図形データがありません。", vbExclamation, "GenerateFlowFromSheet"
+        Exit Sub
+    End If
+
+    ' T3: 図形配置ループ（縦一列、B列の Left 座標、2行目の Top から開始）
+    Const SHAPE_W   As Double = 120   ' 図形幅（ポイント）
+    Const SHAPE_H   As Double = 40    ' 図形高さ（ポイント）
+    Const SHAPE_GAP As Double = 20    ' 図形間隔（ポイント）
+
+    Dim startLeft As Double
+    Dim startTop  As Double
+    startLeft = ws.Cells(2, 2).Left   ' B列
+    startTop  = ws.Cells(2, 2).Top    ' 2行目
+
+    ' 図形名 → Shape の Dictionary（接続に使用）
+    Dim shapeMap As Object
+    Set shapeMap = CreateObject("Scripting.Dictionary")
+
+    Dim newShp   As Shape
+    Dim shpCount As Long
+    Dim curTop   As Double
+    curTop   = startTop
+    shpCount = 0
+
+    Dim ii As Long
+    For ii = 1 To defCount
+
+        ' 種別→msoAutoShapeType 変換
+        Dim shapeType As Long
+        Select Case defKinds(ii)
+            Case "判断"
+                shapeType = msoShapeDiamond
+            Case "開始終了"
+                shapeType = msoShapeRoundedRectangle
+            Case Else   ' "処理" またはその他
+                shapeType = msoShapeRectangle
+        End Select
+
+        ' 図形を追加してスタイル・テキスト・名前を設定
+        Set newShp = ws.Shapes.AddShape(shapeType, startLeft, curTop, SHAPE_W, SHAPE_H)
+        Call FlowStyle(newShp)
+        newShp.Name = defNames(ii)
+        If defTexts(ii) <> "" Then
+            newShp.TextFrame2.TextRange.Text = defTexts(ii)
+        End If
+
+        shapeMap(defNames(ii)) = newShp
+        shpCount = shpCount + 1
+
+        curTop = curTop + SHAPE_H + SHAPE_GAP
+        Set newShp = Nothing
+    Next ii
+
+    ' T4: 接続線の生成（YES/NO接続先を走査）
+    Dim connCount As Long
+    Dim fromShp   As Shape
+    Dim toShp     As Shape
+    connCount = 0
+
+    For ii = 1 To defCount
+        ' YES（D列）接続
+        If defYes(ii) <> "" Then
+            If shapeMap.Exists(defYes(ii)) Then
+                Set fromShp = shapeMap(defNames(ii))
+                Set toShp   = shapeMap(defYes(ii))
+                Call ConnectAutoByPosition(fromShp, toShp)
+                connCount = connCount + 1
+            End If
+        End If
+        ' NO（E列）接続
+        If defNo(ii) <> "" Then
+            If shapeMap.Exists(defNo(ii)) Then
+                Set fromShp = shapeMap(defNames(ii))
+                Set toShp   = shapeMap(defNo(ii))
+                Call ConnectAutoByPosition(fromShp, toShp)
+                connCount = connCount + 1
+            End If
+        End If
+    Next ii
+
+    ' T5: ステータスバー完了アナウンス（3秒後に自動消去）
+    Application.StatusBar = "フロー生成完了：" & shpCount & " 個の図形、" & connCount & " 本の接続線を配置しました"
+    Application.OnTime Now + TimeValue("00:00:03"), "'" & ThisWorkbook.Name & "'!ThisWorkbook.ClearStatusBar"
+
+    ws.Activate
+
+End Sub
+
+
+'=============================================================================
+' Sub ExportFlowData
+' 概要 : フローシートの図形・接続情報を一覧シートに書き出し、
+'        さらに CSV ファイルとして業務フローブックと同じフォルダに保存する
+'
+' 出力列：A:図形名 / B:テキスト / C:種別 / D:行 / E:列 / F:接続先1 / G:接続先2
+'=============================================================================
+Sub ExportFlowData()
+
+    If Not LoadConfig() Then Exit Sub
+
+    ' --- 対象ブック・シート取得 ---
+    Dim ws As Worksheet
+    Set ws = GetTargetSheet(m_FlowSheet)
+    If ws Is Nothing Then Exit Sub
+
+    Dim targetWb As Workbook
+    Set targetWb = ws.Parent
+
+    ' T7: コネクタ走査 → 接続先 Dictionary（図形名 → "接続先1[,接続先2]"）
+    Dim connMap As Object
+    Set connMap = CreateObject("Scripting.Dictionary")
+
+    Dim shp     As Shape
+    Dim srcName As String
+    Dim dstName As String
+
+    For Each shp In ws.Shapes
+        If shp.Connector Then
+            On Error Resume Next
+            srcName = shp.ConnectorFormat.BeginConnectedShape.Name
+            dstName = shp.ConnectorFormat.EndConnectedShape.Name
+            If Err.Number = 0 And srcName <> "" And dstName <> "" Then
+                If connMap.Exists(srcName) Then
+                    connMap(srcName) = connMap(srcName) & "," & dstName
+                Else
+                    connMap(srcName) = dstName
+                End If
+            End If
+            Err.Clear
+            On Error GoTo 0
+        End If
+    Next shp
+
+    ' 図形を Top 座標順に並べて配列化（ボタン・1行目・コネクタ除外）
+    Dim arr()  As Shape
+    Dim n      As Long
+    Dim row1H  As Double
+    row1H = ws.Rows(1).Height
+    n = 0
+
+    For Each shp In ws.Shapes
+        If Not IsButtonShape(shp) And Not shp.Connector And shp.Top >= row1H Then
+            n = n + 1
+            ReDim Preserve arr(1 To n)
+            Set arr(n) = shp
+        End If
+    Next shp
+
+    If n = 0 Then
+        MsgBox "フローシートに操作対象の図形がありません。", vbExclamation, "ExportFlowData"
+        Exit Sub
+    End If
+
+    Call SortShapesByAxis(arr, n, "Top")
+
+    ' T8: ExportShapeList 拡張版（F/G列：接続先1/2 を含む）
+    Call ExportShapeList(targetWb, arr, n, connMap)
+
+    ' T9: CSV 書き出し（UTF-8 BOM付き、タイムスタンプ付きファイル名）
+    Dim csvPath As String
+    csvPath = targetWb.Path & "\" & "flow_export_" & Format(Now, "YYYYMMDD_HHMMSS") & ".csv"
+    Call WriteShapeListCsv(targetWb, arr, n, connMap, csvPath)
+
+    ' T10: 完了 MsgBox
+    MsgBox "エクスポート完了。" & n & " 件の図形情報を出力しました。" & vbCrLf & _
+           "保存先：" & csvPath, vbInformation, "ExportFlowData"
+
+    ws.Activate
 
 End Sub
 
@@ -683,6 +933,43 @@ End Sub
 
 
 '=============================================================================
+' Sub ConnectAutoByPosition  【内部ヘルパー・直接実行は非推奨】
+' 概要 : 2 図形の位置関係を判定し、縦または横方向でコネクタ接続する
+'        ConnectSelectedShapes_Auto および GenerateFlowFromSheet から使用
+' 引数 : shp1 … 接続元（相対的に左上にある図形）
+'         shp2 … 接続先（相対的に右下にある図形）
+'=============================================================================
+Private Sub ConnectAutoByPosition(shp1 As Shape, shp2 As Shape)
+
+    Dim cx1 As Double, cy1 As Double
+    Dim cx2 As Double, cy2 As Double
+    cx1 = shp1.Left + shp1.Width  / 2
+    cy1 = shp1.Top  + shp1.Height / 2
+    cx2 = shp2.Left + shp2.Width  / 2
+    cy2 = shp2.Top  + shp2.Height / 2
+
+    Dim dx As Double, dy As Double
+    dx = cx1 - cx2
+    dy = cy1 - cy2
+
+    If Abs(dx) > Abs(dy) Then
+        If dx < 0 Then
+            Call ConnectTwoShapes_Horizontal(shp1, shp2)
+        Else
+            Call ConnectTwoShapes_Horizontal(shp2, shp1)
+        End If
+    Else
+        If dy < 0 Then
+            Call ConnectTwoShapes_Vertical(shp1, shp2)
+        Else
+            Call ConnectTwoShapes_Vertical(shp2, shp1)
+        End If
+    End If
+
+End Sub
+
+
+'=============================================================================
 '
 '  ── 補助ユーティリティ ──
 '
@@ -966,7 +1253,7 @@ End Sub
 
 '=============================================================================
 ' Sub SetupFlowButtons
-' 概要 : 業務フローブックのフローシート上部に全マクロ（11個）の実行ボタンを配置する
+' 概要 : 業務フローブックのフローシート上部に全マクロ（13個）の実行ボタンを配置する
 '        既存の BTN_FLOW_ 系ボタンは削除してから再配置する
 '        ボタンの OnAction にはマクロブック名を動的に解決して設定する
 '
@@ -1003,8 +1290,8 @@ Sub SetupFlowButtons()
     Next di
 
     ' --- マクロ名・ボタンラベル定義 ---
-    Dim macroNames(1 To 11) As String
-    Dim btnLabels(1 To 11)  As String
+    Dim macroNames(1 To 13) As String
+    Dim btnLabels(1 To 13)  As String
 
     ' 図形配置系
     macroNames(1) = "Flow_Process"                      : btnLabels(1) = "処理"
@@ -1020,6 +1307,8 @@ Sub SetupFlowButtons()
     macroNames(9)  = "ToggleConnectorType"              : btnLabels(9)  = "接続線切替"
     macroNames(10) = "InjectTextFromList"               : btnLabels(10) = "テキスト注入"
     macroNames(11) = "RenameShapesSequentially"         : btnLabels(11) = "連番命名"
+    macroNames(12) = "GenerateFlowFromSheet"            : btnLabels(12) = "フロー生成"
+    macroNames(13) = "ExportFlowData"                   : btnLabels(13) = "ﾌﾛｰ出力"
 
     ' --- ボタンサイズ・間隔 ---
     Const BTN_W   As Double = 60    ' ボタン幅（ポイント）
@@ -1040,9 +1329,9 @@ Sub SetupFlowButtons()
     macroBook = ThisWorkbook.Name
 
     ' --- グループ別ボタン色（Fill / Line）---
-    '   i=1〜3  : 図形配置系 … 緑
-    '   i=4〜6  : 接続系     … 青
-    '   i=7〜11 : ユーティリティ系 … オレンジ
+    '   i=1〜3   : 図形配置系 … 緑
+    '   i=4〜6   : 接続系     … 青
+    '   i=7〜13  : ユーティリティ系 … オレンジ
     Dim fillRGB As Long
     Dim lineRGB As Long
 
@@ -1051,11 +1340,11 @@ Sub SetupFlowButtons()
     Dim curTop  As Double
     Dim btn     As Shape
 
-    ' --- 全11ボタンを横1行に配置 ---
+    ' --- 全13ボタンを横1行に配置 ---
     curLeft = startLeft
     curTop  = startTop
 
-    For i = 1 To 11
+    For i = 1 To 13
 
         ' グループ判定
         If i <= 3 Then
@@ -1091,8 +1380,8 @@ Sub SetupFlowButtons()
             .TextRange.ParagraphFormat.Alignment = msoAlignCenter
         End With
 
-        ' 3番目のあとにグループ間隔を挿入
-        If i = 3 Then
+        ' グループ境界のあとにグループ間隔を挿入（3番目と6番目）
+        If i = 3 Or i = 6 Then
             curLeft = curLeft + BTN_W + GRP_GAP
         Else
             curLeft = curLeft + BTN_W + BTN_GAP
@@ -1101,7 +1390,7 @@ Sub SetupFlowButtons()
         Set btn = Nothing
     Next i
 
-    MsgBox "11個のボタンを「" & m_FlowSheet & "」シートの上部に配置しました。" & vbCrLf & _
+    MsgBox "13個のボタンを「" & m_FlowSheet & "」シートの上部に配置しました。" & vbCrLf & _
            "マクロブック（" & macroBook & "）が開いている状態でクリックしてください。", _
            vbInformation, "ボタン配置完了"
 
@@ -1350,7 +1639,7 @@ Sub SetupReadmeSheet()
     setupData(4, 3) = "ファイル名に Config の「対象ブックキーワード」を含むこと"
     setupData(5, 1) = "5"
     setupData(5, 2) = "Config シートの緑ボタンをクリック"
-    setupData(5, 3) = "フローシートの上部に操作ボタン11個が色分けされて1行に配置される"
+    setupData(5, 3) = "フローシートの上部に操作ボタン13個が色分けされて1行に配置される"
 
     Dim si As Long
     For si = 1 To 5
@@ -1423,13 +1712,13 @@ Sub SetupReadmeSheet()
     ' =====================================================================
     ' 【5】マクロ一覧
     ' =====================================================================
-    Call RmWriteSecHeader(ws, r, "■ マクロ一覧（全11機能）", CLR_SEC_BG)
+    Call RmWriteSecHeader(ws, r, "■ マクロ一覧（全13機能）", CLR_SEC_BG)
     r = r + 1
 
     Call RmWriteTblHeader(ws, r, Array("カテゴリ", "ボタン名", "マクロ名", "機能説明"), CLR_TBL_HDR)
     r = r + 1
 
-    Dim macroData(1 To 11, 1 To 4) As String
+    Dim macroData(1 To 13, 1 To 4) As String
     macroData(1, 1)  = "🟢 図形配置系" : macroData(1, 2)  = "処理"
     macroData(1, 3)  = "Flow_Process"
     macroData(1, 4)  = "矩形（処理ボックス）を選択セル位置に配置する"
@@ -1463,9 +1752,15 @@ Sub SetupReadmeSheet()
     macroData(11, 1) = "🟠 ユーティリティ系" : macroData(11, 2) = "連番命名"
     macroData(11, 3) = "RenameShapesSequentially"
     macroData(11, 4) = "シート上の図形をTop順に FLOW_{種別}_{001} 形式で連番命名する（1行目除外）"
+    macroData(12, 1) = "🟠 ユーティリティ系" : macroData(12, 2) = "フロー生成"
+    macroData(12, 3) = "GenerateFlowFromSheet"
+    macroData(12, 4) = "定義シート（図形名/テキスト/種別/接続先YES/NO）をもとにフロー図を自動生成する"
+    macroData(13, 1) = "🟠 ユーティリティ系" : macroData(13, 2) = "ﾌﾛｰ出力"
+    macroData(13, 3) = "ExportFlowData"
+    macroData(13, 4) = "フローシートの図形・接続情報を一覧シートと CSV（UTF-8 BOM付き）に書き出す"
 
     Dim mi As Long
-    For mi = 1 To 11
+    For mi = 1 To 13
         ws.Cells(r, 1).Value = macroData(mi, 1)
         ws.Cells(r, 2).Value = macroData(mi, 2)
         ws.Cells(r, 3).Value = macroData(mi, 3)
@@ -1571,19 +1866,22 @@ End Sub
 
 '=============================================================================
 ' Sub ExportShapeList  【内部ヘルパー・直接実行は非推奨】
-' 概要 : リネーム済み図形の一覧を「図形一覧」シートに書き出す
+' 概要 : 図形一覧を「図形一覧」シートに書き出す
 '        シートが存在しない場合は新規作成、存在する場合は上書き
 '
 ' 書き出し形式：
-'   1行目  … ヘッダー（A: 図形名 / B: 種別）
-'   2行目以降 … 図形名と種別（Top 座標順）
+'   A: 図形名 / B: テキスト / C: 種別 / D: 行 / E: 列 / F: 接続先1 / G: 接続先2
+'   connMap を省略した場合（RenameShapesSequentially 経由）は A:E 列のみ
 '=============================================================================
-Private Sub ExportShapeList(wb As Workbook, arr() As Shape, n As Long)
+Private Sub ExportShapeList(wb As Workbook, arr() As Shape, n As Long, _
+                             Optional connMap As Variant)
 
-    Dim wsList As Worksheet
-    Dim ws     As Worksheet
+    Dim wsList   As Worksheet
+    Dim ws       As Worksheet
+    Dim hasConn  As Boolean
 
-    Set ws = wb.Worksheets(m_FlowSheet)
+    Set ws  = wb.Worksheets(m_FlowSheet)
+    hasConn = Not IsMissing(connMap)
 
     ' シートの取得または新規作成
     On Error Resume Next
@@ -1603,10 +1901,16 @@ Private Sub ExportShapeList(wb As Workbook, arr() As Shape, n As Long)
     wsList.Cells(1, 3).Value = "種別"
     wsList.Cells(1, 4).Value = "行"
     wsList.Cells(1, 5).Value = "列"
+    If hasConn Then
+        wsList.Cells(1, 6).Value = "接続先1"
+        wsList.Cells(1, 7).Value = "接続先2"
+    End If
 
     ' データ行：図形名・テキスト・種別・位置を書き出す
-    Dim i   As Long
-    Dim txt As String
+    Dim i    As Long
+    Dim txt  As String
+    Dim dst1 As String
+    Dim dst2 As String
 
     For i = 1 To n
         ' テキスト取得（コネクタ等でエラーになる場合は空欄）
@@ -1620,12 +1924,115 @@ Private Sub ExportShapeList(wb As Workbook, arr() As Shape, n As Long)
         wsList.Cells(i + 1, 3).Value = GetShapeKind(arr(i))
         wsList.Cells(i + 1, 4).Value = TopToRowNum(ws, arr(i).Top)
         wsList.Cells(i + 1, 5).Value = LeftToColLetter(ws, arr(i).Left)
+
+        ' F/G 列：接続先（connMap がある場合のみ）
+        If hasConn Then
+            dst1 = ""
+            dst2 = ""
+            If connMap.Exists(arr(i).Name) Then
+                Dim parts() As String
+                parts = Split(connMap(arr(i).Name), ",")
+                If UBound(parts) >= 0 Then dst1 = parts(0)
+                If UBound(parts) >= 1 Then dst2 = parts(1)
+            End If
+            wsList.Cells(i + 1, 6).Value = dst1
+            wsList.Cells(i + 1, 7).Value = dst2
+        End If
     Next i
 
     ' 列幅を自動調整
-    wsList.Columns("A:E").AutoFit
+    If hasConn Then
+        wsList.Columns("A:G").AutoFit
+    Else
+        wsList.Columns("A:E").AutoFit
+    End If
 
 End Sub
+
+
+'=============================================================================
+' Sub WriteShapeListCsv  【内部ヘルパー・直接実行は非推奨】
+' 概要 : 図形一覧を UTF-8 BOM 付き CSV として保存する
+'        列構成：図形名 / テキスト / 種別 / 行 / 列 / 接続先1 / 接続先2
+'=============================================================================
+Private Sub WriteShapeListCsv(wb As Workbook, arr() As Shape, n As Long, _
+                               connMap As Object, csvPath As String)
+
+    Dim ws As Worksheet
+    Set ws = wb.Worksheets(m_FlowSheet)
+
+    Dim stream As Object
+    Set stream = CreateObject("ADODB.Stream")
+    With stream
+        .Type    = 2        ' adTypeText
+        .Charset = "UTF-8"
+        .Open
+    End With
+
+    ' BOM 書き込み（UTF-8 BOM: EF BB BF）
+    stream.WriteText Chr(239) & Chr(187) & Chr(191), 0
+
+    ' ヘッダー行
+    stream.WriteText EscapeCsvField("図形名") & "," & _
+                     EscapeCsvField("テキスト") & "," & _
+                     EscapeCsvField("種別") & "," & _
+                     EscapeCsvField("行") & "," & _
+                     EscapeCsvField("列") & "," & _
+                     EscapeCsvField("接続先1") & "," & _
+                     EscapeCsvField("接続先2"), 1   ' adWriteLine
+
+    ' データ行
+    Dim i    As Long
+    Dim txt  As String
+    Dim dst1 As String
+    Dim dst2 As String
+
+    For i = 1 To n
+        On Error Resume Next
+        txt = arr(i).TextFrame2.TextRange.Text
+        If Err.Number <> 0 Then txt = ""
+        On Error GoTo 0
+
+        dst1 = ""
+        dst2 = ""
+        If connMap.Exists(arr(i).Name) Then
+            Dim parts() As String
+            parts = Split(connMap(arr(i).Name), ",")
+            If UBound(parts) >= 0 Then dst1 = parts(0)
+            If UBound(parts) >= 1 Then dst2 = parts(1)
+        End If
+
+        stream.WriteText EscapeCsvField(arr(i).Name) & "," & _
+                         EscapeCsvField(txt) & "," & _
+                         EscapeCsvField(GetShapeKind(arr(i))) & "," & _
+                         EscapeCsvField(CStr(TopToRowNum(ws, arr(i).Top))) & "," & _
+                         EscapeCsvField(LeftToColLetter(ws, arr(i).Left)) & "," & _
+                         EscapeCsvField(dst1) & "," & _
+                         EscapeCsvField(dst2), 1
+    Next i
+
+    stream.SaveToFile csvPath, 2   ' adSaveCreateOverWrite
+    stream.Close
+    Set stream = Nothing
+
+End Sub
+
+
+'=============================================================================
+' Function EscapeCsvField  【内部ヘルパー・直接実行は非推奨】
+' 概要 : CSV フィールドをダブルクォートでエスケープする
+'        カンマ・ダブルクォート・改行を含む場合は " で囲む
+'=============================================================================
+Private Function EscapeCsvField(val As String) As String
+
+    If InStr(val, """") > 0 Or InStr(val, ",") > 0 Or _
+       InStr(val, vbCrLf) > 0 Or InStr(val, vbLf) > 0 Then
+        EscapeCsvField = """" & Replace(val, """", """""") & """"
+    Else
+        EscapeCsvField = val
+    End If
+
+End Function
 
 
 '=============================================================================
