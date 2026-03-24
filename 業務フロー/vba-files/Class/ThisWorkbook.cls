@@ -110,6 +110,9 @@ Attribute VB_Exposed = True
 '         ExportShapeList 拡張（F/G 列：接続先1/2 追加）
 '         SetupFlowButtons 更新（11→13 ボタン）
 '         SetupReadmeSheet 更新（11→13 マクロ一覧）
+'   v5.5  SetupDefSheet 追加（フロー定義シートのテンプレート自動生成）(#25)
+'         SetupFlowButtons 更新（13→14 ボタン：定義作成 追加）
+'         SetupReadmeSheet 更新（13→14 マクロ一覧）
 '=============================================================================
 
 Option Explicit
@@ -326,6 +329,129 @@ Sub ConnectMultipleShapes_LeftToRight()
     For i = 1 To n - 1
         Call ConnectTwoShapes_Horizontal(arr(i), arr(i + 1))
     Next i
+
+End Sub
+
+
+'=============================================================================
+' Sub SetupDefSheet
+' 概要 : フロー定義シートを新規作成（または初期化）する
+'        GenerateFlowFromSheet の入力フォーマットを自動で整える
+'
+' 生成内容：
+'   ・ヘッダー行（A:図形名 / B:テキスト / C:種別 / D:接続先(YES) / E:接続先(NO)）
+'   ・サンプル行 3 行（開始終了 → 処理 → 判断 の記入例）
+'   ・C列にドロップダウン入力規則（処理 / 判断 / 開始終了）
+'=============================================================================
+Sub SetupDefSheet()
+
+    If Not LoadConfig() Then Exit Sub
+
+    Dim targetWb As Workbook
+    Dim wsTmp    As Worksheet
+
+    ' 対象ブックを特定（フローシートが存在するブック）
+    Dim wsFlow As Worksheet
+    Set wsFlow = GetTargetSheet(m_FlowSheet)
+    If wsFlow Is Nothing Then Exit Sub
+    Set targetWb = wsFlow.Parent
+
+    ' 既存シートの確認
+    Dim wsDef  As Worksheet
+    On Error Resume Next
+    Set wsDef = targetWb.Worksheets(m_DefSheet)
+    On Error GoTo 0
+
+    If Not wsDef Is Nothing Then
+        Dim dlgAns As VbMsgBoxResult
+        dlgAns = MsgBox("「" & m_DefSheet & "」シートはすでに存在します。" & vbCrLf & _
+                        "内容をリセットしますか？（既存データは失われます）", _
+                        vbYesNo + vbExclamation, "定義シートの初期化")
+        If dlgAns <> vbYes Then Exit Sub
+        wsDef.Cells.ClearContents
+        wsDef.Cells.ClearFormats
+        wsDef.Cells.Validation.Delete
+    Else
+        Set wsDef = targetWb.Worksheets.Add(After:=targetWb.Worksheets(targetWb.Worksheets.count))
+        wsDef.Name = m_DefSheet
+    End If
+
+    ' --- 列幅設定 ---
+    wsDef.Columns("A").ColumnWidth = 18   ' 図形名
+    wsDef.Columns("B").ColumnWidth = 22   ' テキスト
+    wsDef.Columns("C").ColumnWidth = 12   ' 種別
+    wsDef.Columns("D").ColumnWidth = 18   ' 接続先(YES)
+    wsDef.Columns("E").ColumnWidth = 18   ' 接続先(NO)
+
+    ' --- ヘッダー行（1行目）---
+    Dim headers(1 To 5) As String
+    headers(1) = "図形名"
+    headers(2) = "テキスト"
+    headers(3) = "種別"
+    headers(4) = "接続先(YES)"
+    headers(5) = "接続先(NO)"
+
+    Dim hdrBg As Long
+    hdrBg = RGB(70, 130, 180)   ' 青系
+
+    Dim hc As Long
+    For hc = 1 To 5
+        With wsDef.Cells(1, hc)
+            .Value             = headers(hc)
+            .Font.Bold         = True
+            .Font.Color        = RGB(255, 255, 255)
+            .Font.Name         = FONT_NAME
+            .Font.Size         = 9
+            .Interior.Color    = hdrBg
+            .HorizontalAlignment = xlCenter
+        End With
+    Next hc
+    wsDef.Rows(1).RowHeight = 20
+
+    ' --- サンプルデータ（2〜4行目）---
+    '   行2: 開始終了の例
+    '   行3: 処理の例
+    '   行4: 判断の例
+    Dim sampleData(1 To 3, 1 To 5) As String
+    sampleData(1, 1) = "Flow_001" : sampleData(1, 2) = "開始" : sampleData(1, 3) = "開始終了"
+    sampleData(1, 4) = "Flow_002" : sampleData(1, 5) = ""
+    sampleData(2, 1) = "Flow_002" : sampleData(2, 2) = "処理A" : sampleData(2, 3) = "処理"
+    sampleData(2, 4) = "Flow_003" : sampleData(2, 5) = ""
+    sampleData(3, 1) = "Flow_003" : sampleData(3, 2) = "条件分岐" : sampleData(3, 3) = "判断"
+    sampleData(3, 4) = "Flow_001" : sampleData(3, 5) = "Flow_002"
+
+    Dim sr As Long
+    For sr = 1 To 3
+        Dim sc As Long
+        For sc = 1 To 5
+            With wsDef.Cells(sr + 1, sc)
+                .Value     = sampleData(sr, sc)
+                .Font.Name = FONT_NAME
+                .Font.Size = 9
+                .Font.Color = RGB(120, 120, 120)   ' グレー（サンプルとわかるよう）
+            End With
+        Next sc
+        wsDef.Rows(sr + 1).RowHeight = 18
+    Next sr
+
+    ' --- C列：種別のドロップダウン入力規則（2行目以降）---
+    With wsDef.Range("C2:C1000").Validation
+        .Delete
+        .Add Type:=xlValidateList, _
+             AlertStyle:=xlValidAlertStop, _
+             Formula1:="処理,判断,開始終了"
+        .ShowInput = True
+        .ShowError = True
+    End With
+
+    ' --- シートをアクティブにして A2 を選択 ---
+    wsDef.Activate
+    wsDef.Cells(2, 1).Select
+
+    MsgBox "「" & m_DefSheet & "」シートを作成しました。" & vbCrLf & _
+           "グレーのサンプル行を上書きして図形情報を入力してください。" & vbCrLf & _
+           "C列の種別はドロップダウンから選択できます。", _
+           vbInformation, "定義シート作成完了"
 
 End Sub
 
@@ -1253,7 +1379,7 @@ End Sub
 
 '=============================================================================
 ' Sub SetupFlowButtons
-' 概要 : 業務フローブックのフローシート上部に全マクロ（13個）の実行ボタンを配置する
+' 概要 : 業務フローブックのフローシート上部に全マクロ（14個）の実行ボタンを配置する
 '        既存の BTN_FLOW_ 系ボタンは削除してから再配置する
 '        ボタンの OnAction にはマクロブック名を動的に解決して設定する
 '
@@ -1290,8 +1416,8 @@ Sub SetupFlowButtons()
     Next di
 
     ' --- マクロ名・ボタンラベル定義 ---
-    Dim macroNames(1 To 13) As String
-    Dim btnLabels(1 To 13)  As String
+    Dim macroNames(1 To 14) As String
+    Dim btnLabels(1 To 14)  As String
 
     ' 図形配置系
     macroNames(1) = "Flow_Process"                      : btnLabels(1) = "処理"
@@ -1307,8 +1433,9 @@ Sub SetupFlowButtons()
     macroNames(9)  = "ToggleConnectorType"              : btnLabels(9)  = "接続線切替"
     macroNames(10) = "InjectTextFromList"               : btnLabels(10) = "テキスト注入"
     macroNames(11) = "RenameShapesSequentially"         : btnLabels(11) = "連番命名"
-    macroNames(12) = "GenerateFlowFromSheet"            : btnLabels(12) = "フロー生成"
-    macroNames(13) = "ExportFlowData"                   : btnLabels(13) = "ﾌﾛｰ出力"
+    macroNames(12) = "SetupDefSheet"                    : btnLabels(12) = "定義作成"
+    macroNames(13) = "GenerateFlowFromSheet"            : btnLabels(13) = "フロー生成"
+    macroNames(14) = "ExportFlowData"                   : btnLabels(14) = "ﾌﾛｰ出力"
 
     ' --- ボタンサイズ・間隔 ---
     Const BTN_W   As Double = 60    ' ボタン幅（ポイント）
@@ -1331,7 +1458,7 @@ Sub SetupFlowButtons()
     ' --- グループ別ボタン色（Fill / Line）---
     '   i=1〜3   : 図形配置系 … 緑
     '   i=4〜6   : 接続系     … 青
-    '   i=7〜13  : ユーティリティ系 … オレンジ
+    '   i=7〜14  : ユーティリティ系 … オレンジ
     Dim fillRGB As Long
     Dim lineRGB As Long
 
@@ -1340,11 +1467,11 @@ Sub SetupFlowButtons()
     Dim curTop  As Double
     Dim btn     As Shape
 
-    ' --- 全13ボタンを横1行に配置 ---
+    ' --- 全14ボタンを横1行に配置 ---
     curLeft = startLeft
     curTop  = startTop
 
-    For i = 1 To 13
+    For i = 1 To 14
 
         ' グループ判定
         If i <= 3 Then
@@ -1390,7 +1517,7 @@ Sub SetupFlowButtons()
         Set btn = Nothing
     Next i
 
-    MsgBox "13個のボタンを「" & m_FlowSheet & "」シートの上部に配置しました。" & vbCrLf & _
+    MsgBox "14個のボタンを「" & m_FlowSheet & "」シートの上部に配置しました。" & vbCrLf & _
            "マクロブック（" & macroBook & "）が開いている状態でクリックしてください。", _
            vbInformation, "ボタン配置完了"
 
@@ -1639,7 +1766,7 @@ Sub SetupReadmeSheet()
     setupData(4, 3) = "ファイル名に Config の「対象ブックキーワード」を含むこと"
     setupData(5, 1) = "5"
     setupData(5, 2) = "Config シートの緑ボタンをクリック"
-    setupData(5, 3) = "フローシートの上部に操作ボタン13個が色分けされて1行に配置される"
+    setupData(5, 3) = "フローシートの上部に操作ボタン14個が色分けされて1行に配置される"
 
     Dim si As Long
     For si = 1 To 5
@@ -1712,13 +1839,13 @@ Sub SetupReadmeSheet()
     ' =====================================================================
     ' 【5】マクロ一覧
     ' =====================================================================
-    Call RmWriteSecHeader(ws, r, "■ マクロ一覧（全13機能）", CLR_SEC_BG)
+    Call RmWriteSecHeader(ws, r, "■ マクロ一覧（全14機能）", CLR_SEC_BG)
     r = r + 1
 
     Call RmWriteTblHeader(ws, r, Array("カテゴリ", "ボタン名", "マクロ名", "機能説明"), CLR_TBL_HDR)
     r = r + 1
 
-    Dim macroData(1 To 13, 1 To 4) As String
+    Dim macroData(1 To 14, 1 To 4) As String
     macroData(1, 1)  = "🟢 図形配置系" : macroData(1, 2)  = "処理"
     macroData(1, 3)  = "Flow_Process"
     macroData(1, 4)  = "矩形（処理ボックス）を選択セル位置に配置する"
@@ -1752,15 +1879,18 @@ Sub SetupReadmeSheet()
     macroData(11, 1) = "🟠 ユーティリティ系" : macroData(11, 2) = "連番命名"
     macroData(11, 3) = "RenameShapesSequentially"
     macroData(11, 4) = "シート上の図形をTop順に FLOW_{種別}_{001} 形式で連番命名する（1行目除外）"
-    macroData(12, 1) = "🟠 ユーティリティ系" : macroData(12, 2) = "フロー生成"
-    macroData(12, 3) = "GenerateFlowFromSheet"
-    macroData(12, 4) = "定義シート（図形名/テキスト/種別/接続先YES/NO）をもとにフロー図を自動生成する"
-    macroData(13, 1) = "🟠 ユーティリティ系" : macroData(13, 2) = "ﾌﾛｰ出力"
-    macroData(13, 3) = "ExportFlowData"
-    macroData(13, 4) = "フローシートの図形・接続情報を一覧シートと CSV（UTF-8 BOM付き）に書き出す"
+    macroData(12, 1) = "🟠 ユーティリティ系" : macroData(12, 2) = "定義作成"
+    macroData(12, 3) = "SetupDefSheet"
+    macroData(12, 4) = "フロー定義シートをテンプレート付きで作成する（ヘッダー・サンプル行・種別ドロップダウン）"
+    macroData(13, 1) = "🟠 ユーティリティ系" : macroData(13, 2) = "フロー生成"
+    macroData(13, 3) = "GenerateFlowFromSheet"
+    macroData(13, 4) = "定義シート（図形名/テキスト/種別/接続先YES/NO）をもとにフロー図を自動生成する"
+    macroData(14, 1) = "🟠 ユーティリティ系" : macroData(14, 2) = "ﾌﾛｰ出力"
+    macroData(14, 3) = "ExportFlowData"
+    macroData(14, 4) = "フローシートの図形・接続情報を一覧シートと CSV（UTF-8 BOM付き）に書き出す"
 
     Dim mi As Long
-    For mi = 1 To 13
+    For mi = 1 To 14
         ws.Cells(r, 1).Value = macroData(mi, 1)
         ws.Cells(r, 2).Value = macroData(mi, 2)
         ws.Cells(r, 3).Value = macroData(mi, 3)
