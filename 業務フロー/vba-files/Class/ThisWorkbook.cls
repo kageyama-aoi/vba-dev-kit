@@ -99,6 +99,11 @@ Attribute VB_Exposed = True
 '   v5.2  リファクタリング：重複コード除去・共通ヘルパー整理（#21）
 '         Flow_AddShape 追加 / ConnectTwoShapes 統合 / DeleteShapeByName 追加
 '         LoadConfig のシート確認を1回に集約 / SortShapesByAxis の Dim をループ外へ移動
+'   v5.3  バグ修正・堅牢化（#22）
+'         InjectTextFromList の shp 初期化漏れ修正
+'         GetTargetSheet の CLng クラッシュを IsNumeric チェックで防止
+'         RenameShapesSequentially の n=0 時に原因メッセージを追加
+'         RunDiagnostics マクロを追加（設定確認・動作テスト用）
 '=============================================================================
 
 Option Explicit
@@ -490,6 +495,12 @@ Private Function GetTargetSheet(Optional sheetName As String = "") As Worksheet
                 Exit Function
             End If
 
+            If Not IsNumeric(ans) Then
+                MsgBox "番号を半角数字で入力してください。", vbExclamation, "入力エラー"
+                Set GetTargetSheet = Nothing
+                Exit Function
+            End If
+
             Dim idx As Long
             idx = CLng(ans)
             If idx < 1 Or idx > matchCount Then
@@ -859,6 +870,7 @@ Sub InjectTextFromList()
         shpName = Trim(wsDef.Cells(i, 1).Value)
         txt = Trim(wsDef.Cells(i, 2).Value)
 
+        Set shp = Nothing   ' 前ループの値を必ずクリア
         On Error Resume Next
         Set shp = ws.Shapes(shpName)
         On Error GoTo 0
@@ -925,6 +937,12 @@ Sub RenameShapesSequentially()
             Set arr(n) = ws.Shapes(k)
         End If
     Next k
+
+    If n = 0 Then
+        MsgBox "対象図形がありません。" & vbCrLf & _
+               "（ボタンおよび 1 行目の図形は除外されます）", vbInformation, "連番命名"
+        Exit Sub
+    End If
 
     ' Top 座標順にソート
     Call SortShapesByAxis(arr, n, "Top")
@@ -1671,5 +1689,156 @@ Private Sub DeleteShapeByName(ws As Worksheet, shapeName As String)
             Exit For
         End If
     Next shp
+
+End Sub
+
+
+'=============================================================================
+'
+'  ── 診断・テスト ──
+'
+'=============================================================================
+
+'=============================================================================
+' Sub RunDiagnostics
+' 概要 : マクロの設定状態と対象ブック・シートの存在を確認して結果を表示する
+'        動作確認・トラブルシューティング時に Alt+F8 から実行する
+'
+' 確認項目：
+'   1. Config シートの存在と全必須キーの読み込み
+'   2. 対象ブック（キーワード一致）の存在
+'   3. フローシート・定義シート・一覧シートの存在
+'   4. フローシート上の図形数（ボタン除く）
+'=============================================================================
+Sub RunDiagnostics()
+
+    Dim msg  As String
+    Dim icon As Long
+    msg  = "【RunDiagnostics 結果】" & vbCrLf & vbCrLf
+    icon = vbInformation
+
+    ' ------------------------------------------------------------------
+    ' 1. Config シートの存在確認
+    ' ------------------------------------------------------------------
+    Dim wsConfig As Worksheet
+    On Error Resume Next
+    Set wsConfig = ThisWorkbook.Worksheets(CONFIG_SHEET_NAME)
+    On Error GoTo 0
+
+    If wsConfig Is Nothing Then
+        msg  = msg & "[FAIL] Config シートが見つかりません。" & vbCrLf
+        MsgBox msg, vbExclamation, "診断結果"
+        Exit Sub
+    End If
+    msg = msg & "[OK]   Config シートあり" & vbCrLf
+
+    ' ------------------------------------------------------------------
+    ' 2. 必須キーの読み込み（LoadConfig と同じロジック）
+    ' ------------------------------------------------------------------
+    Dim keys(1 To 4)  As String
+    Dim vals(1 To 4)  As String
+    keys(1) = "対象ブックキーワード"
+    keys(2) = "フローシート名"
+    keys(3) = "定義シート名"
+    keys(4) = "一覧シート名"
+
+    Dim ki As Long
+    For ki = 1 To 4
+        vals(ki) = GetConfigValue(keys(ki), wsConfig)
+        If vals(ki) = "" Then
+            msg  = msg & "[FAIL] Config キー「" & keys(ki) & "」が未設定" & vbCrLf
+            icon = vbExclamation
+        Else
+            msg = msg & "[OK]   " & keys(ki) & " = " & vals(ki) & vbCrLf
+        End If
+    Next ki
+
+    If vals(1) = "" Then
+        MsgBox msg, icon, "診断結果"
+        Exit Sub
+    End If
+
+    ' ------------------------------------------------------------------
+    ' 3. 対象ブックの検索
+    ' ------------------------------------------------------------------
+    Dim keyword   As String
+    Dim wb        As Workbook
+    Dim matchWbs() As String
+    Dim mc        As Long
+
+    keyword = vals(1)
+    mc = 0
+
+    For Each wb In Application.Workbooks
+        If InStr(wb.Name, keyword) > 0 And wb.Name <> ThisWorkbook.Name Then
+            mc = mc + 1
+            ReDim Preserve matchWbs(1 To mc)
+            matchWbs(mc) = wb.Name
+        End If
+    Next wb
+
+    Select Case mc
+        Case 0
+            msg  = msg & "[WARN] 対象ブック（キーワード：" & keyword & "）が開かれていません" & vbCrLf & _
+                         "       → ThisWorkbook をフォールバックとして使用します" & vbCrLf
+            If icon <> vbExclamation Then icon = vbExclamation
+        Case 1
+            msg = msg & "[OK]   対象ブック = " & matchWbs(1) & vbCrLf
+        Case Else
+            msg = msg & "[WARN] 対象ブックが " & mc & " 件ヒット（実行時に選択ダイアログが表示されます）" & vbCrLf
+            Dim mwi As Long
+            For mwi = 1 To mc
+                msg = msg & "       " & mwi & ": " & matchWbs(mwi) & vbCrLf
+            Next mwi
+    End Select
+
+    ' ------------------------------------------------------------------
+    ' 4. フローシート・定義シート・一覧シートの存在確認
+    ' ------------------------------------------------------------------
+    If mc > 0 Then
+        Dim targetWb  As Workbook
+        Set targetWb = Application.Workbooks(matchWbs(1))
+
+        Dim checkSheets(1 To 3) As String
+        checkSheets(1) = vals(2)   ' フローシート名
+        checkSheets(2) = vals(3)   ' 定義シート名
+        checkSheets(3) = vals(4)   ' 一覧シート名
+
+        Dim si     As Long
+        Dim wsChk  As Worksheet
+        For si = 1 To 3
+            Set wsChk = Nothing
+            On Error Resume Next
+            Set wsChk = targetWb.Worksheets(checkSheets(si))
+            On Error GoTo 0
+            If wsChk Is Nothing Then
+                msg  = msg & "[FAIL] シート「" & checkSheets(si) & "」が対象ブックに存在しません" & vbCrLf
+                icon = vbExclamation
+            Else
+                msg = msg & "[OK]   シート「" & checkSheets(si) & "」あり"
+
+                ' フローシートの場合は図形数も表示
+                If si = 1 Then
+                    Dim shpCount As Long
+                    Dim shp      As Shape
+                    shpCount = 0
+                    Dim row1H As Double
+                    row1H = wsChk.Rows(1).Height
+                    For Each shp In wsChk.Shapes
+                        If Not IsButtonShape(shp) And shp.Top >= row1H Then
+                            shpCount = shpCount + 1
+                        End If
+                    Next shp
+                    msg = msg & "（操作対象図形数: " & shpCount & " 件）"
+                End If
+                msg = msg & vbCrLf
+            End If
+        Next si
+    End If
+
+    ' ------------------------------------------------------------------
+    ' 結果表示
+    ' ------------------------------------------------------------------
+    MsgBox msg, icon, "診断結果"
 
 End Sub
