@@ -2,11 +2,6 @@
 
 ## 優先度：高
 
-- [ ] T1: SetupFlowButtons のボタンレイアウトを横1行に変更（要望1）
-- [ ] T2: InjectTextFromList・RenameShapesSequentially・SetParagraphAndFont に完了アナウンス追加（要望2）
-- [ ] T3: 全マクロ共通で作業結果シートへ自動移動（要望3）
-- [ ] T4: RenameShapesSequentially・SelectShapesInColumnRange で1行目の図形を除外（要望4）
-
 ## 優先度：中
 
 ## 優先度：低
@@ -28,3 +23,7 @@
 - [x] ボタン重なり・OnActionブック名欠落修正（#15）
 - [x] OnActionにThisWorkbook.プレフィックス追加（#16）
 - [x] FlowStyleのシェイプ文字色を黒に設定（#18）
+- [x] ボタン横1行化・完了アナウンス・シート移動・1行目除外（#19）
+- [x] ボタンをグループ別に色分け（緑/青/オレンジ）（#20）
+- [x] リファクタリング：コード重複の解消・共通ヘルパー整理（#21）
+- [x] バグ修正3件・RunDiagnostics 診断マクロ追加（#22）
