@@ -1,19 +1,25 @@
-﻿#=============================================================================
+#=============================================================================
 # vba-export.ps1
-# 用途 : VBEからエクスポートしたShift-JISの.clsをUTF-8に変換して
-#        vba-files/Class/ に上書きする（gitコミット前に実行）
+# 用途 : VBEからエクスポートしたShift-JISのVBAファイルをUTF-8に変換して
+#        対応フォルダに上書きする（gitコミット前に実行）
+#
+# 対応ファイル:
+#   _vbe/*.cls → vba-files/Class/   （クラスモジュール）
+#   _vbe/*.bas → vba-files/Module/  （標準モジュール）
+#   _vbe/*.frm → vba-files/UserForm/（ユーザーフォーム）
 #
 # 使い方:
 #   1. ExcelのVBE（Alt+F11）→ 各モジュールを右クリック → ファイルのエクスポート
 #      → 保存先を vba-files/_vbe/ に指定
 #   2. このスクリプトをPowerShellで実行
 #      > .\scripts\vba-export.ps1
-#   3. vba-files/Class/ がUTF-8で上書きされる
+#   3. 各フォルダがUTF-8で上書きされる
 #   4. git add / git commit でコミット
 #=============================================================================
 
 $srcDir = Join-Path $PSScriptRoot "..\vba-files\_vbe"
-$dstDir = Join-Path $PSScriptRoot "..\vba-files\Class"
+$sjis   = [System.Text.Encoding]::GetEncoding("shift_jis")
+$utf8nb = New-Object System.Text.UTF8Encoding $false  # BOMなしUTF-8
 
 if (-not (Test-Path $srcDir)) {
     Write-Host "[エラー] $srcDir が見つかりません" -ForegroundColor Red
@@ -21,31 +27,37 @@ if (-not (Test-Path $srcDir)) {
     exit 1
 }
 
-$files = Get-ChildItem -Path $srcDir -Filter "*.cls"
+# 拡張子 → 出力先フォルダの対応
+$extMap = @{
+    ".cls" = "Class"
+    ".bas" = "Module"
+    ".frm" = "UserForm"
+}
 
-if ($files.Count -eq 0) {
-    Write-Host "[警告] $srcDir に .cls ファイルが見つかりません" -ForegroundColor Yellow
-    Write-Host "VBEからのエクスポート先を vba-files/_vbe/ にしてください"
+$allFiles = Get-ChildItem -Path $srcDir -File | Where-Object { $extMap.ContainsKey($_.Extension) }
+
+if ($allFiles.Count -eq 0) {
+    Write-Host "[警告] $srcDir に対象ファイル（.cls/.bas/.frm）が見つかりません" -ForegroundColor Yellow
     exit 1
 }
 
-# 出力先フォルダを確保
-if (-not (Test-Path $dstDir)) {
-    New-Item -ItemType Directory -Path $dstDir | Out-Null
-}
+$totalCount = 0
 
-$sjis   = [System.Text.Encoding]::GetEncoding("shift_jis")
-$utf8nb = New-Object System.Text.UTF8Encoding $false  # BOMなしUTF-8
+foreach ($file in $allFiles) {
+    $subDir = $extMap[$file.Extension]
+    $dstDir = Join-Path $PSScriptRoot "..\vba-files\$subDir"
 
-$count = 0
-foreach ($file in $files) {
+    if (-not (Test-Path $dstDir)) {
+        New-Item -ItemType Directory -Path $dstDir | Out-Null
+    }
+
     $content = [System.IO.File]::ReadAllText($file.FullName, $sjis)
     $dstPath = Join-Path $dstDir $file.Name
     [System.IO.File]::WriteAllText($dstPath, $content, $utf8nb)
-    Write-Host "[変換完了] _vbe\$($file.Name)  →  Class\$($file.Name)"
-    $count++
+    Write-Host "[変換完了] _vbe\$($file.Name)  →  $subDir\$($file.Name)"
+    $totalCount++
 }
 
 Write-Host ""
-Write-Host "$count 件のファイルをUTF-8に変換しました" -ForegroundColor Green
-Write-Host "次のステップ: git add vba-files/Class/ してコミットしてください" -ForegroundColor Cyan
+Write-Host "$totalCount 件のファイルをUTF-8に変換しました" -ForegroundColor Green
+Write-Host "次のステップ: git add vba-files/ してコミットしてください" -ForegroundColor Cyan

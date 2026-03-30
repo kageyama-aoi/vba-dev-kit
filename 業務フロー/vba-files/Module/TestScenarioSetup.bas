@@ -66,8 +66,16 @@ Public Sub SetupTestScenarioSheets()
     ' ── Step5: 重複チェック ──────────────────────────────────────
     CheckDuplicates patterns, targetWb
 
+    ' ── Step5.5: パターン選択フォーム #33 ───────────────────────
+    Dim selectedPatterns As Collection
+    Set selectedPatterns = ShowPatternSelectForm(patterns)
+    If selectedPatterns Is Nothing Then
+        WriteLog targetWb, "パターン選択：ユーザーがキャンセル"
+        Exit Sub
+    End If
+
     ' ── Step6: パターン用シート作成 ──────────────────────────────
-    Set createdSheets = CreatePatternSheets(targetWb, patterns)
+    Set createdSheets = CreatePatternSheets(targetWb, selectedPatterns)
 
     ' ── Step7: シートリンクシート作成 ────────────────────────────
     CreateLinkSheet targetWb, createdSheets
@@ -77,6 +85,38 @@ Public Sub SetupTestScenarioSheets()
     MsgBox "処理が完了しました。" & vbCrLf & _
            "作成シート数：" & createdSheets.Count & " 件" & vbCrLf & _
            "詳細は「" & LOG_SHEET_NAME & "」シートを確認してください。", vbInformation, "完了"
+
+    ' ── 完了後シートリンクへ移動 #34 ────────────────────────────
+    ActivateLinkSheet targetWb
+
+End Sub
+
+'=============================================================================
+' ■ パターン選択フォームの表示（#33）
+'=============================================================================
+Private Function ShowPatternSelectForm(patterns As Collection) As Collection
+
+    With PatternSelectForm
+        Set .Patterns = patterns
+        .Show
+        If .Cancelled Then
+            Set ShowPatternSelectForm = Nothing
+        Else
+            Set ShowPatternSelectForm = .SelectedPatterns
+        End If
+    End With
+    Unload PatternSelectForm
+
+End Function
+
+'=============================================================================
+' ■ シートリンクシートをアクティブにする（#34 #35）
+'=============================================================================
+Private Sub ActivateLinkSheet(targetWb As Workbook)
+
+    If SheetExists(targetWb, LINK_SHEET_NAME) Then
+        targetWb.Worksheets(LINK_SHEET_NAME).Activate
+    End If
 
 End Sub
 
@@ -445,6 +485,9 @@ Public Sub CleanupEmptyPatternSheets()
     ' ── Step7: 完了通知 ──────────────────────────────────────────
     WriteLog targetWb, "空シート削除完了：" & deletedCount & " 件。時刻：" & Format(Now, "yyyy/mm/dd hh:mm:ss")
     MsgBox deletedCount & " 件の空シートを削除しました。", vbInformation, "削除完了"
+
+    ' ── 完了後シートリンクへ移動 #35 ────────────────────────────
+    ActivateLinkSheet targetWb
 
 End Sub
 
