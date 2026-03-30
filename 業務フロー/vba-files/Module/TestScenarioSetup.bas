@@ -359,3 +359,121 @@ Private Sub WriteLog(targetWb As Workbook, message As String)
     ws.Cells(nextRow, 2).Value = message
 
 End Sub
+
+'=============================================================================
+' ■ 空のパターンシートを一括削除 #32
+'=============================================================================
+Public Sub CleanupEmptyPatternSheets()
+
+    ' ── Step1: ファイル選択 & オープン ──────────────────────────
+    Dim targetWb As Workbook
+    Set targetWb = OpenTargetWorkbook()
+    If targetWb Is Nothing Then Exit Sub
+
+    ' ── Step2: シートリンクシートの確認 ──────────────────────────
+    If Not SheetExists(targetWb, LINK_SHEET_NAME) Then
+        MsgBox "「" & LINK_SHEET_NAME & "」シートが見つかりません。" & vbCrLf & _
+               "先に SetupTestScenarioSheets を実行してください。", vbExclamation, "シートなし"
+        Exit Sub
+    End If
+
+    ' ── Step3: シートリンクからパターンシート名を収集 ─────────────
+    Dim linkWs As Worksheet
+    Set linkWs = targetWb.Worksheets(LINK_SHEET_NAME)
+
+    Dim emptySheets As New Collection   ' 削除候補（空シート名）
+    Dim linkRows    As New Collection   ' 対応するシートリンクの行番号
+
+    Dim r As Long
+    r = 2  ' 1行目はヘッダー
+    Do While linkWs.Cells(r, 2).Value <> ""
+        Dim sheetName As String
+        sheetName = CStr(linkWs.Cells(r, 2).Value)
+
+        If SheetExists(targetWb, sheetName) Then
+            Dim ws As Worksheet
+            Set ws = targetWb.Worksheets(sheetName)
+            If IsSheetEmpty(ws) Then
+                emptySheets.Add sheetName
+                linkRows.Add r
+            End If
+        End If
+        r = r + 1
+    Loop
+
+    ' ── Step4: 削除候補がなければ終了 ────────────────────────────
+    If emptySheets.Count = 0 Then
+        MsgBox "削除対象の空シートはありませんでした。", vbInformation, "対象なし"
+        Exit Sub
+    End If
+
+    ' ── Step5: 確認ダイアログ ────────────────────────────────────
+    Dim listMsg As String
+    Dim i As Long
+    For i = 1 To emptySheets.Count
+        listMsg = listMsg & "  ・" & emptySheets(i) & vbCrLf
+    Next i
+
+    Dim answer As VbMsgBoxResult
+    answer = MsgBox("以下の空シート（" & emptySheets.Count & " 件）を削除します。" & vbCrLf & vbCrLf & _
+                    listMsg & vbCrLf & _
+                    "よろしいですか？", vbYesNo + vbExclamation, "空シートの削除確認")
+    If answer = vbNo Then
+        WriteLog targetWb, "空シート削除：ユーザーがキャンセル"
+        Exit Sub
+    End If
+
+    ' ── Step6: シート削除 & シートリンク行削除 ───────────────────
+    Application.DisplayAlerts = False
+
+    ' シートリンクの行は下から削除しないとズレるため逆順で処理
+    Dim deletedCount As Long
+    deletedCount = 0
+
+    For i = emptySheets.Count To 1 Step -1
+        targetWb.Worksheets(emptySheets(i)).Delete
+        linkWs.Rows(linkRows(i)).Delete
+        deletedCount = deletedCount + 1
+        WriteLog targetWb, "削除：" & emptySheets(i)
+    Next i
+
+    ' シートリンクの HYPERLINK 数式を行番号に合わせて再構築
+    RebuildLinkSheetFormulas linkWs
+
+    Application.DisplayAlerts = True
+
+    ' ── Step7: 完了通知 ──────────────────────────────────────────
+    WriteLog targetWb, "空シート削除完了：" & deletedCount & " 件。時刻：" & Format(Now, "yyyy/mm/dd hh:mm:ss")
+    MsgBox deletedCount & " 件の空シートを削除しました。", vbInformation, "削除完了"
+
+End Sub
+
+'=============================================================================
+' ■ シートが空かどうかを判定
+'=============================================================================
+Private Function IsSheetEmpty(ws As Worksheet) As Boolean
+
+    With ws.UsedRange
+        If .Cells.Count = 1 And .Cells(1, 1).Value = "" Then
+            IsSheetEmpty = True
+        Else
+            IsSheetEmpty = False
+        End If
+    End With
+
+End Function
+
+'=============================================================================
+' ■ シートリンクの HYPERLINK 数式を行番号に合わせて再構築
+'=============================================================================
+Private Sub RebuildLinkSheetFormulas(linkWs As Worksheet)
+
+    Dim r As Long
+    r = 2
+    Do While linkWs.Cells(r, 2).Value <> ""
+        linkWs.Cells(r, 3).Formula = _
+            "=HYPERLINK(""#'""&B" & r & "&""'!A1"",""⇒""&B" & r & ")"
+        r = r + 1
+    Loop
+
+End Sub
