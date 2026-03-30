@@ -4,6 +4,7 @@
 
 # ----- ログ -----
 logs/
+.claude/bash-log.txt
 
 # ----- バックアップ -----
 /xvba_excel_backup

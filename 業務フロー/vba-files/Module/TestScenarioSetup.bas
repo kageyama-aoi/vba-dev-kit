@@ -139,7 +139,7 @@ Private Function FindPatternNoCell(ws As Worksheet) As Range
 End Function
 
 '=============================================================================
-' ■ パターン番号抽出（見つかったセルの1つ下から空白まで）
+' ■ パターン番号抽出（見つかったセルの結合範囲末尾の次行から空白まで）
 '=============================================================================
 Private Function ExtractPatterns(patternNoCell As Range) As Collection
 
@@ -148,11 +148,16 @@ Private Function ExtractPatterns(patternNoCell As Range) As Collection
     Dim val     As String
     Dim startRow As Long
 
-    startRow = patternNoCell.Row + 1
+    ' 結合セル対応：MergeArea の末尾行の次行から開始
+    ' 結合なし（1行）の場合も MergeArea.Rows.Count = 1 なので同じ計算で動く
+    Dim mergeArea As Range
+    Set mergeArea = patternNoCell.MergeArea
+    startRow = mergeArea.Row + mergeArea.Rows.Count
+
     Dim ws As Worksheet
     Set ws = patternNoCell.Parent
     Dim c  As Long
-    c = patternNoCell.Column
+    c = mergeArea.Column  ' 結合の左端列を使用
 
     r = startRow
     Do While ws.Cells(r, c).Value <> ""
