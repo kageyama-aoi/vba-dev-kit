@@ -1,0 +1,85 @@
+name: 📋 タスク・作業メモ（VBA）
+description: VBA開発タスクや調査メモをIssueとして起票する
+title: "[TASK] "
+labels: ["task"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## タスクメモ
+        作業内容と完了条件を記録します。
+
+  - type: input
+    id: goal
+    attributes:
+      label: このタスクのゴール
+      placeholder: 例）Sql_Table_Formatter の大量データ対応を高速化する
+    validations:
+      required: true
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: タスク種別
+      options:
+        - 開発・実装
+        - バグ修正
+        - 調査・検証（Spike）
+        - リファクタリング
+        - ドキュメント作成
+        - 設定・環境整備
+        - レビュー・確認
+    validations:
+      required: true
+
+  - type: dropdown
+    id: estimate
+    attributes:
+      label: 作業見積もり
+      options:
+        - XS（1時間以内）
+        - S（半日）
+        - M（1日）
+        - L（2〜3日）
+        - XL（1週間以上）
+
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景・目的
+      description: なぜこのタスクが必要か。
+      placeholder: 例）テーブル数が多いSQLファイルで処理が数分かかっており、実用性に欠けている。
+
+  - type: textarea
+    id: todo
+    attributes:
+      label: 作業内訳（TODO）
+      value: |
+        - [ ]
+        - [ ]
+        - [ ]
+
+  - type: textarea
+    id: references
+    attributes:
+      label: 参考リンク・関連Issue
+      placeholder: |
+        - 関連Issue: #
+        - 参考記事: https://
+
+  - type: input
+    id: deadline
+    attributes:
+      label: 期限（任意）
+      placeholder: 例）2026-05-01
+
+  - type: checkboxes
+    id: definition_of_done
+    attributes:
+      label: 完了の定義（DoD）
+      options:
+        - label: 動作確認が完了している
+        - label: VBA注意事項.md に新しい知見を反映した（該当する場合）
+        - label: 必要なドキュメントを更新した

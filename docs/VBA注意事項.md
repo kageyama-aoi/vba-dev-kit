@@ -4,6 +4,26 @@
 
 ---
 
+### 目次（一覧）
+
+| # | 項目 | 一言メモ |
+|---|------|---------|
+| 1 | 文字コード（UTF-8） | 読み込みは ADODB.Stream。BOM除去も忘れずに |
+| 2 | Excel操作（パフォーマンス） | ループ内で Cells を直接触らない。配列経由で |
+| 3 | パフォーマンス設定の定型句 | ScreenUpdating / Calculation / EnableEvents を Cleanup とセットで |
+| 4 | 処理進捗の表示（StatusBar） | 長い処理は StatusBar で状況を見せる |
+| 5 | エラー発生箇所の特定（errContext） | フェーズ名をメッセージに含める |
+| 6 | 変数宣言の位置 | Dim はすべて関数先頭にまとめる |
+| 7 | 固定サイズ配列と動的配列 | ReDim Preserve したいなら `Dim arr()` で動的宣言 |
+| 8 | UsedRangeの使用禁止 | 最終行は `End(xlUp).Row` で取る |
+| 9 | Variant配列の扱い | Range.Value は2次元・1始まり。単一セルは IsArray で判定 |
+| 10 | 配列書き込み | Resize.Value = 配列 で一括書き込み |
+| 11 | And / Or は短絡評価しない | 配列境界チェックと配列アクセスは条件を分けて書く |
+| 12 | ByRefエラー対策 | Variant要素を String 引数に渡す時は CStr() か ByVal |
+| 13 | モジュール変数のスコープ | モジュールレベルは Private 明示。定数は Private Const に |
+
+---
+
 ### ■ 文字コード（UTF-8）
 
 ・VBAはUTF-8を直接読み込めないため、ファイル読み込みは ADODB.Stream を使用すること
@@ -136,6 +156,32 @@ Next i
 ' OK（1回のCOM呼び出しで完了）
 ws.Range("A1").Resize(1000, 1).Value = data
 ```
+
+---
+
+### ■ And / Or は短絡評価しない（配列境界外アクセスに注意）
+
+・VBAの `And` / `Or` は**両辺を必ず評価する**（C言語の `&&` / `||` とは異なる）
+・`Do While i < rowCount And arr(i) = val` のような書き方は、
+  `i = rowCount`（配列の上限外）のときでも `arr(i)` を評価して「インデックスが有効範囲にありません」エラーになる
+・配列アクセスを含む条件は必ず分けて書くこと
+
+```vba
+' NG：i が UBound を超えると arr(i) でエラー
+Do While i < rowCount And arr(i) = tName
+    i = i + 1
+Loop
+
+' OK：先に範囲チェックしてから配列アクセス
+Do While i < rowCount
+    If arr(i) <> tName Then Exit Do
+    i = i + 1
+Loop
+```
+
+【実例】v1.3 で ReDim Preserve による配列縮小を追加したことで顕在化。
+  それ以前は配列が MAX_ROWS サイズのままだったため、範囲外が空文字を返して
+  偶然ループを抜けていた。
 
 ---
 
