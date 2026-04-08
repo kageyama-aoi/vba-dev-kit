@@ -34,7 +34,7 @@ VBA（Excel）開発のための共有ナレッジ・スキル管理リポジト
 | プロジェクト | リポジトリ | 概要 |
 |------------|-----------|------|
 | excel-image-importer | https://github.com/kageyama-aoi/excel-image-importer | 画像一括貼り付けツール |
-| 20_SQL⇒新テーブル定義 | （未登録） | SQLからテーブル定義書を生成 |
+| mysql-table-definition-to-excel | https://github.com/kageyama-aoi/vba-mysql-table-definition-to-excel | SQLからテーブル定義書を生成 |
 
 > 各プロジェクトフォルダはこのリポジトリの管理対象外。
 
