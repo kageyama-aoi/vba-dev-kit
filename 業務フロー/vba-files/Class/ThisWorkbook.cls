@@ -525,8 +525,10 @@ Sub GenerateFlowFromSheet()
         Next di
     End If
 
-    ' T1: 定義シートの読み込み（2行目から、A列が空になったら終了）
-    Dim rowIdx   As Long
+    ' T1: 定義シートの一括読み取り（B-1 対応：Range.Value で配列に一括取得）
+    Dim defLastRow As Long
+    Dim defData    As Variant
+    Dim rowIdx     As Long
     Dim defNames() As String
     Dim defTexts() As String
     Dim defKinds() As String
@@ -534,28 +536,28 @@ Sub GenerateFlowFromSheet()
     Dim defNo()    As String
     Dim defCount   As Long
 
-    rowIdx   = 2   ' 1行目はヘッダー
-    defCount = 0
-
-    Do While wsDef.Cells(rowIdx, 1).Value <> ""
-        defCount = defCount + 1
-        ReDim Preserve defNames(1 To defCount)
-        ReDim Preserve defTexts(1 To defCount)
-        ReDim Preserve defKinds(1 To defCount)
-        ReDim Preserve defYes(1 To defCount)
-        ReDim Preserve defNo(1 To defCount)
-        defNames(defCount) = CStr(wsDef.Cells(rowIdx, 1).Value)
-        defTexts(defCount) = CStr(wsDef.Cells(rowIdx, 2).Value)
-        defKinds(defCount) = CStr(wsDef.Cells(rowIdx, 3).Value)
-        defYes(defCount)   = CStr(wsDef.Cells(rowIdx, 4).Value)
-        defNo(defCount)    = CStr(wsDef.Cells(rowIdx, 5).Value)
-        rowIdx = rowIdx + 1
-    Loop
-
-    If defCount = 0 Then
+    defLastRow = wsDef.Cells(wsDef.Rows.Count, 1).End(xlUp).Row
+    If defLastRow < 2 Then
         MsgBox "定義シートに図形データがありません。", vbExclamation, "GenerateFlowFromSheet"
         Exit Sub
     End If
+
+    defData  = wsDef.Range("A2:E" & defLastRow).Value
+    defCount = UBound(defData, 1)
+
+    ReDim defNames(1 To defCount)
+    ReDim defTexts(1 To defCount)
+    ReDim defKinds(1 To defCount)
+    ReDim defYes(1 To defCount)
+    ReDim defNo(1 To defCount)
+
+    For rowIdx = 1 To defCount
+        defNames(rowIdx) = CStr(defData(rowIdx, 1))
+        defTexts(rowIdx) = CStr(defData(rowIdx, 2))
+        defKinds(rowIdx) = CStr(defData(rowIdx, 3))
+        defYes(rowIdx)   = CStr(defData(rowIdx, 4))
+        defNo(rowIdx)    = CStr(defData(rowIdx, 5))
+    Next rowIdx
 
     ' T3: 図形配置ループ（縦一列、B列の Left 座標、2行目の Top から開始）
     Const SHAPE_W   As Double = 120   ' 図形幅（ポイント）
@@ -1261,13 +1263,15 @@ Sub InjectTextFromList()
 
     If Not LoadConfig() Then Exit Sub
 
-    Dim wsDef    As Worksheet
-    Dim ws       As Worksheet
-    Dim shp      As Shape
-    Dim i        As Long
-    Dim shpName  As String
-    Dim txt      As String
-    Dim hitCount As Long
+    Dim wsDef      As Worksheet
+    Dim ws         As Worksheet
+    Dim shp        As Shape
+    Dim i          As Long
+    Dim shpName    As String
+    Dim txt        As String
+    Dim hitCount   As Long
+    Dim defLastRow As Long
+    Dim defData    As Variant
 
     Set wsDef = GetTargetSheet(m_DefSheet)
     If wsDef Is Nothing Then Exit Sub
@@ -1275,27 +1279,32 @@ Sub InjectTextFromList()
     Set ws = GetTargetSheet(m_FlowSheet)
     If ws Is Nothing Then Exit Sub
 
-    hitCount = 0
-    i = 2   ' 1行目はヘッダーとして読み飛ばし
+    hitCount   = 0
+    defLastRow = wsDef.Cells(wsDef.Rows.Count, 1).End(xlUp).Row
 
-    Do While wsDef.Cells(i, 1).Value <> ""
+    If defLastRow >= 2 Then
 
-        shpName = Trim(wsDef.Cells(i, 1).Value)
-        txt = Trim(wsDef.Cells(i, 2).Value)
+        defData = wsDef.Range("A2:B" & defLastRow).Value
 
-        Set shp = Nothing   ' 前ループの値を必ずクリア
-        On Error Resume Next
-        Set shp = ws.Shapes(shpName)
-        On Error GoTo 0
+        For i = 1 To UBound(defData, 1)
 
-        If Not shp Is Nothing Then
-            Call FlowStyle(shp, txt)
-            hitCount = hitCount + 1
+            shpName = Trim(CStr(defData(i, 1)))
+            txt     = Trim(CStr(defData(i, 2)))
+
             Set shp = Nothing
-        End If
+            On Error Resume Next
+            Set shp = ws.Shapes(shpName)
+            On Error GoTo 0
 
-        i = i + 1
-    Loop
+            If Not shp Is Nothing Then
+                Call FlowStyle(shp, txt)
+                hitCount = hitCount + 1
+                Set shp = Nothing
+            End If
+
+        Next i
+
+    End If
 
     Application.StatusBar = "テキスト注入完了：" & hitCount & " 件"
     Application.OnTime Now + TimeValue("0:00:03"), "'" & ThisWorkbook.Name & "'!ThisWorkbook.ClearStatusBar"
