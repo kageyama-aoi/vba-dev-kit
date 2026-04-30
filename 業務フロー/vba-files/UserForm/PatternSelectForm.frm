@@ -79,15 +79,6 @@ Private Sub UserForm_Initialize()
         .BorderStyle = fmBorderStyleSingle
     End With
 
-    ' ── パターンを追加（初期状態：全選択） ──────────────────
-    If Not Patterns Is Nothing Then
-        Dim i As Long
-        For i = 1 To Patterns.Count
-            lstPatterns.AddItem CStr(Patterns(i))
-            lstPatterns.Selected(i - 1) = True
-        Next i
-    End If
-
     Dim btnTop As Long: btnTop = listH + 34
 
     ' ── 全選択ボタン ────────────────────────────────────────
@@ -116,6 +107,19 @@ Private Sub UserForm_Initialize()
         .Cancel = True
     End With
 
+End Sub
+
+'=============================================================================
+' ■ Activate 時にリストを構築（Patterns セット後に発火するため）
+'=============================================================================
+Private Sub UserForm_Activate()
+    If lstPatterns.ListCount > 0 Then Exit Sub  ' 2回目以降はスキップ
+    If Patterns Is Nothing Then Exit Sub
+    Dim i As Long
+    For i = 1 To Patterns.Count
+        lstPatterns.AddItem CStr(Patterns(i))
+        lstPatterns.Selected(i - 1) = True
+    Next i
 End Sub
 
 '=============================================================================

@@ -29,55 +29,66 @@ Private Const INVALID_CHARS      As String = "\/:*?[]"
 '=============================================================================
 Public Sub SetupTestScenarioSheets()
 
-    Dim targetWb    As Workbook
-    Dim ws          As Worksheet
-    Dim foundCell   As Range
-    Dim patterns    As Collection
-    Dim createdSheets As Collection
+    Dim targetWb         As Workbook
+    Dim ws               As Worksheet
+    Dim foundCell        As Range
+    Dim patterns         As Collection
+    Dim createdSheets    As Collection
+    Dim selectedPatterns As Collection
+    Dim errContext       As String
 
-    ' ── Step1: ファイル選択 & オープン ──────────────────────────
+    ' ── Step1: ファイル選択 & オープン（キャンセルは正常終了）──
     Set targetWb = OpenTargetWorkbook()
     If targetWb Is Nothing Then Exit Sub
 
+    On Error GoTo Cleanup
+    Application.ScreenUpdating = False
+
     ' ── Step2: テストシナリオシート確認 ─────────────────────────
+    errContext = "テストシナリオシート確認"
     If Not SheetExists(targetWb, TARGET_SHEET_NAME) Then
         MsgBox "「" & TARGET_SHEET_NAME & "」シートが見つかりません。" & vbCrLf & _
                "対象ブック：" & targetWb.Name, vbExclamation, "シートが見つかりません"
-        Exit Sub
+        GoTo Cleanup
     End If
     Set ws = targetWb.Worksheets(TARGET_SHEET_NAME)
 
     ' ── Step3: パターンNoセル検索 ────────────────────────────────
+    errContext = "パターンNoセル検索"
     Set foundCell = FindPatternNoCell(ws)
     If foundCell Is Nothing Then
         MsgBox "「" & PATTERN_NO_LABEL & "」という項目がシート内に見つかりません。" & vbCrLf & _
                "テストシナリオシートのフォーマットを確認してください。", vbExclamation, "項目が見つかりません"
-        Exit Sub
+        GoTo Cleanup
     End If
     WriteLog targetWb, "パターンNoセル発見：" & foundCell.Address(False, False)
 
     ' ── Step4: パターン番号抽出 ──────────────────────────────────
+    errContext = "パターン番号抽出"
     Set patterns = ExtractPatterns(foundCell)
     If patterns.Count = 0 Then
         MsgBox "「" & PATTERN_NO_LABEL & "」の下に値が見つかりませんでした。", vbExclamation, "データなし"
-        Exit Sub
+        GoTo Cleanup
     End If
 
     ' ── Step5: 重複チェック ──────────────────────────────────────
+    errContext = "重複チェック"
     CheckDuplicates patterns, targetWb
 
-    ' ── Step5.5: パターン選択フォーム #33 ───────────────────────
-    Dim selectedPatterns As Collection
+    ' ── Step5.5: パターン選択フォーム ───────────────────────────
+    errContext = "パターン選択"
     Set selectedPatterns = ShowPatternSelectForm(patterns)
     If selectedPatterns Is Nothing Then
         WriteLog targetWb, "パターン選択：ユーザーがキャンセル"
-        Exit Sub
+        GoTo Cleanup
     End If
 
     ' ── Step6: パターン用シート作成 ──────────────────────────────
+    errContext = "シート作成"
     Set createdSheets = CreatePatternSheets(targetWb, selectedPatterns)
 
     ' ── Step7: シートリンクシート作成 ────────────────────────────
+    errContext = "シートリンク作成"
     CreateLinkSheet targetWb, createdSheets
 
     ' ── 完了 ─────────────────────────────────────────────────────
@@ -86,8 +97,13 @@ Public Sub SetupTestScenarioSheets()
            "作成シート数：" & createdSheets.Count & " 件" & vbCrLf & _
            "詳細は「" & LOG_SHEET_NAME & "」シートを確認してください。", vbInformation, "完了"
 
-    ' ── 完了後シートリンクへ移動 #34 ────────────────────────────
     ActivateLinkSheet targetWb
+
+Cleanup:
+    Application.ScreenUpdating = True
+    If Err.Number <> 0 Then
+        MsgBox "エラー（" & errContext & "）: " & Err.Description, vbCritical, "エラー"
+    End If
 
 End Sub
 
@@ -405,29 +421,38 @@ End Sub
 '=============================================================================
 Public Sub CleanupEmptyPatternSheets()
 
-    ' ── Step1: ファイル選択 & オープン ──────────────────────────
-    Dim targetWb As Workbook
+    Dim targetWb     As Workbook
+    Dim linkWs       As Worksheet
+    Dim emptySheets  As New Collection
+    Dim linkRows     As New Collection
+    Dim r            As Long
+    Dim lastRow      As Long
+    Dim sheetName    As String
+    Dim ws           As Worksheet
+    Dim listMsg      As String
+    Dim i            As Long
+    Dim answer       As VbMsgBoxResult
+    Dim deletedCount As Long
+    Dim errContext   As String
+
+    ' ── Step1: ファイル選択 & オープン（キャンセルは正常終了）──
     Set targetWb = OpenTargetWorkbook()
     If targetWb Is Nothing Then Exit Sub
 
+    On Error GoTo Cleanup
+    Application.ScreenUpdating = False
+
     ' ── Step2: シートリンクシートの確認 ──────────────────────────
+    errContext = "シートリンクシート確認"
     If Not SheetExists(targetWb, LINK_SHEET_NAME) Then
         MsgBox "「" & LINK_SHEET_NAME & "」シートが見つかりません。" & vbCrLf & _
                "先に SetupTestScenarioSheets を実行してください。", vbExclamation, "シートなし"
-        Exit Sub
+        GoTo Cleanup
     End If
 
     ' ── Step3: シートリンクからパターンシート名を収集 ─────────────
-    Dim linkWs As Worksheet
+    errContext = "空シート収集"
     Set linkWs = targetWb.Worksheets(LINK_SHEET_NAME)
-
-    Dim emptySheets As New Collection   ' 削除候補（空シート名）
-    Dim linkRows    As New Collection   ' 対応するシートリンクの行番号
-
-    Dim r         As Long
-    Dim lastRow   As Long
-    Dim sheetName As String
-    Dim ws        As Worksheet
     lastRow = linkWs.Cells(linkWs.Rows.Count, 2).End(xlUp).Row
     For r = 2 To lastRow
         sheetName = CStr(linkWs.Cells(r, 2).Value)
@@ -446,30 +471,26 @@ NextLinkRow:
     ' ── Step4: 削除候補がなければ終了 ────────────────────────────
     If emptySheets.Count = 0 Then
         MsgBox "削除対象の空シートはありませんでした。", vbInformation, "対象なし"
-        Exit Sub
+        GoTo Cleanup
     End If
 
     ' ── Step5: 確認ダイアログ ────────────────────────────────────
-    Dim listMsg As String
-    Dim i As Long
+    errContext = "削除確認"
     For i = 1 To emptySheets.Count
         listMsg = listMsg & "  ・" & emptySheets(i) & vbCrLf
     Next i
 
-    Dim answer As VbMsgBoxResult
     answer = MsgBox("以下の空シート（" & emptySheets.Count & " 件）を削除します。" & vbCrLf & vbCrLf & _
                     listMsg & vbCrLf & _
                     "よろしいですか？", vbYesNo + vbExclamation, "空シートの削除確認")
     If answer = vbNo Then
         WriteLog targetWb, "空シート削除：ユーザーがキャンセル"
-        Exit Sub
+        GoTo Cleanup
     End If
 
-    ' ── Step6: シート削除 & シートリンク行削除 ───────────────────
+    ' ── Step6: シート削除 & シートリンク行削除（逆順で処理）────
+    errContext = "シート削除"
     Application.DisplayAlerts = False
-
-    ' シートリンクの行は下から削除しないとズレるため逆順で処理
-    Dim deletedCount As Long
     deletedCount = 0
 
     For i = emptySheets.Count To 1 Step -1
@@ -479,17 +500,20 @@ NextLinkRow:
         WriteLog targetWb, "削除：" & emptySheets(i)
     Next i
 
-    ' シートリンクの HYPERLINK 数式を行番号に合わせて再構築
     RebuildLinkSheetFormulas linkWs
-
-    Application.DisplayAlerts = True
 
     ' ── Step7: 完了通知 ──────────────────────────────────────────
     WriteLog targetWb, "空シート削除完了：" & deletedCount & " 件。時刻：" & Format(Now, "yyyy/mm/dd hh:mm:ss")
     MsgBox deletedCount & " 件の空シートを削除しました。", vbInformation, "削除完了"
 
-    ' ── 完了後シートリンクへ移動 #35 ────────────────────────────
     ActivateLinkSheet targetWb
+
+Cleanup:
+    Application.DisplayAlerts = True
+    Application.ScreenUpdating = True
+    If Err.Number <> 0 Then
+        MsgBox "エラー（" & errContext & "）: " & Err.Description, vbCritical, "エラー"
+    End If
 
 End Sub
 
