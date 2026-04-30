@@ -21,6 +21,8 @@
 | 11 | And / Or は短絡評価しない | 配列境界チェックと配列アクセスは条件を分けて書く |
 | 12 | ByRefエラー対策 | Variant要素を String 引数に渡す時は CStr() か ByVal |
 | 13 | モジュール変数のスコープ | モジュールレベルは Private 明示。定数は Private Const に |
+| 14 | Dictionaryへのオブジェクト格納 | Collection等を Dictionary に入れるときは必ず `Set` を付ける |
+| 15 | モジュールレベル宣言の位置 | `Private Const` / `Dim` は最初の Sub より前に書く。関数間はコンパイルエラーになる |
 
 ---
 
@@ -213,3 +215,49 @@ Sub MyFunc(ByVal colName As String)
 Private Const OUTPUT_SHEET_NAME As String = "テーブル定義"
 Private IMAGE_SCALE As Double
 ```
+
+---
+
+### ■ Dictionaryへのオブジェクト格納（Set の省略禁止）
+
+・Scripting.Dictionary にオブジェクト（Collection・Worksheet 等）を格納するときは必ず `Set` を付けること
+・`Set` なしで代入すると、VBA はオブジェクトの**既定プロパティの値**を格納しようとする
+・`Collection` の既定プロパティは `Item`（要引数）のため、引数なしで呼ばれて **Error 450「引数の数が一致していません」** が発生する
+・エラーが `On Error GoTo Cleanup` に捕まるため「なぜそのフェーズで引数エラー？」と原因特定が難しくなる
+
+```vba
+' NG：Collection の既定プロパティ（Item）を引数なしで呼ぼうとして Error 450
+If Not dict.Exists(key) Then dict(key) = New Collection
+
+' OK：Set でオブジェクト参照を格納する
+If Not dict.Exists(key) Then Set dict(key) = New Collection
+```
+
+【実例】v1.6 で indexDetails（Scripting.Dictionary）に Collection を格納する処理を追加した際、
+  3箇所すべてで `Set` が漏れ、ALTER TABLE 行のパース中に Error 450 が発生した。
+
+---
+
+### ■ モジュールレベル宣言の位置
+
+・`Private Const` / `Dim` などのモジュールレベル宣言は、**最初の Sub / Function より前**にすべてまとめること
+・Sub / Function の間に挟むと「End Sub, End Function または End Property 以降には、コメントのみが記述できます」コンパイルエラーになる
+・既存モジュールに定数を追加するときは、ファイル先頭の定数ブロックに追記すること
+
+```vba
+' NG：関数の間に Private Const を置くとコンパイルエラー
+End Function
+
+Private Const NEW_CONST As String = "値"   ' ← ここに置くと NG
+
+Sub NextSub()
+
+' OK：先頭の定数ブロックにまとめる
+Private Const EXISTING_CONST As String = "既存"
+Private Const NEW_CONST       As String = "値"   ' ← 先頭ブロックに追加
+
+Function FirstFunc()
+```
+
+【実例】WriteRunLog 追加時に `Private Const RUN_LOG_SHEET_NAME` を `ResolveFilePath` の直後に置いたため、
+  コンパイルエラーが発生した。定数を先頭の定数ブロックへ移動して解消。
