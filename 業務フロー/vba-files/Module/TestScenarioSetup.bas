@@ -199,12 +199,12 @@ Private Function ExtractPatterns(patternNoCell As Range) As Collection
     Dim c  As Long
     c = mergeArea.Column  ' 結合の左端列を使用
 
-    r = startRow
-    Do While ws.Cells(r, c).Value <> ""
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, c).End(xlUp).Row
+    For r = startRow To lastRow
         val = CStr(ws.Cells(r, c).Value)
-        col.Add val
-        r = r + 1
-    Loop
+        If val <> "" Then col.Add val
+    Next r
 
     Set ExtractPatterns = col
 
@@ -425,11 +425,13 @@ Public Sub CleanupEmptyPatternSheets()
     Dim linkRows    As New Collection   ' 対応するシートリンクの行番号
 
     Dim r         As Long
+    Dim lastRow   As Long
     Dim sheetName As String
     Dim ws        As Worksheet
-    r = 2  ' 1行目はヘッダー
-    Do While linkWs.Cells(r, 2).Value <> ""
+    lastRow = linkWs.Cells(linkWs.Rows.Count, 2).End(xlUp).Row
+    For r = 2 To lastRow
         sheetName = CStr(linkWs.Cells(r, 2).Value)
+        If sheetName = "" Then GoTo NextLinkRow
 
         If SheetExists(targetWb, sheetName) Then
             Set ws = targetWb.Worksheets(sheetName)
@@ -438,8 +440,8 @@ Public Sub CleanupEmptyPatternSheets()
                 linkRows.Add r
             End If
         End If
-        r = r + 1
-    Loop
+NextLinkRow:
+    Next r
 
     ' ── Step4: 削除候補がなければ終了 ────────────────────────────
     If emptySheets.Count = 0 Then
@@ -495,15 +497,7 @@ End Sub
 ' ■ シートが空かどうかを判定
 '=============================================================================
 Private Function IsSheetEmpty(ws As Worksheet) As Boolean
-
-    With ws.UsedRange
-        If .Cells.Count = 1 And .Cells(1, 1).Value = "" Then
-            IsSheetEmpty = True
-        Else
-            IsSheetEmpty = False
-        End If
-    End With
-
+    IsSheetEmpty = ws.Cells.Find("*", LookIn:=xlValues) Is Nothing
 End Function
 
 '=============================================================================
@@ -512,11 +506,13 @@ End Function
 Private Sub RebuildLinkSheetFormulas(linkWs As Worksheet)
 
     Dim r As Long
-    r = 2
-    Do While linkWs.Cells(r, 2).Value <> ""
-        linkWs.Cells(r, 3).Formula = _
-            "=HYPERLINK(""#'""&B" & r & "&""'!A1"",""⇒""&B" & r & ")"
-        r = r + 1
-    Loop
+    Dim lastRow As Long
+    lastRow = linkWs.Cells(linkWs.Rows.Count, 2).End(xlUp).Row
+    For r = 2 To lastRow
+        If linkWs.Cells(r, 2).Value <> "" Then
+            linkWs.Cells(r, 3).Formula = _
+                "=HYPERLINK(""#'""&B" & r & "&""'!A1"",""⇒""&B" & r & ")"
+        End If
+    Next r
 
 End Sub
