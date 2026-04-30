@@ -421,8 +421,8 @@ Sub SetupDefSheet()
     sampleData(3, 4) = "Flow_001" : sampleData(3, 5) = "Flow_002"
 
     Dim sr As Long
+    Dim sc As Long
     For sr = 1 To 3
-        Dim sc As Long
         For sc = 1 To 5
             With wsDef.Cells(sr + 1, sc)
                 .Value     = sampleData(sr, sc)
@@ -573,9 +573,10 @@ Sub GenerateFlowFromSheet()
     Dim shapeMap As Object
     Set shapeMap = CreateObject("Scripting.Dictionary")
 
-    Dim newShp   As Shape
-    Dim shpCount As Long
-    Dim curTop   As Double
+    Dim newShp    As Shape
+    Dim shpCount  As Long
+    Dim curTop    As Double
+    Dim shapeType As Long
     curTop   = startTop
     shpCount = 0
 
@@ -583,7 +584,6 @@ Sub GenerateFlowFromSheet()
     For ii = 1 To defCount
 
         ' 種別→msoAutoShapeType 変換
-        Dim shapeType As Long
         Select Case defKinds(ii)
             Case "判断"
                 shapeType = msoShapeDiamond
@@ -673,18 +673,21 @@ Sub ExportFlowData()
 
     For Each shp In ws.Shapes
         If shp.Connector Then
+            srcName = ""
+            dstName = ""
+            Err.Clear
             On Error Resume Next
             srcName = shp.ConnectorFormat.BeginConnectedShape.Name
+            Err.Clear
             dstName = shp.ConnectorFormat.EndConnectedShape.Name
-            If Err.Number = 0 And srcName <> "" And dstName <> "" Then
+            On Error GoTo 0
+            If srcName <> "" And dstName <> "" Then
                 If connMap.Exists(srcName) Then
                     connMap(srcName) = connMap(srcName) & "," & dstName
                 Else
                     connMap(srcName) = dstName
                 End If
             End If
-            Err.Clear
-            On Error GoTo 0
         End If
     Next shp
 

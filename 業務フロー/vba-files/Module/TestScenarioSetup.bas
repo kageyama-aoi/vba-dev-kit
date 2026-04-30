@@ -290,14 +290,15 @@ Private Function CreatePatternSheets(targetWb As Workbook, patterns As Collectio
     Dim sheetName     As String
     Dim errMsg        As String
     Dim i             As Long
+    Dim alreadyAdded  As Boolean
+    Dim n             As Long
+    Dim newWs         As Worksheet
 
     For i = 1 To patterns.Count
         sheetName = CStr(patterns(i))
 
         ' 今回実行内での重複（2枚目以降）はスキップ
-        Dim alreadyAdded As Boolean
         alreadyAdded = False
-        Dim n As Long
         For n = 1 To addedNames.Count
             If addedNames(n) = sheetName Then
                 alreadyAdded = True
@@ -324,7 +325,6 @@ Private Function CreatePatternSheets(targetWb As Workbook, patterns As Collectio
         End If
 
         ' シート作成
-        Dim newWs As Worksheet
         Set newWs = targetWb.Worksheets.Add(After:=targetWb.Worksheets(targetWb.Worksheets.Count))
         newWs.Name = sheetName
         createdSheets.Add sheetName
@@ -360,9 +360,9 @@ Private Sub CreateLinkSheet(targetWb As Workbook, createdSheets As Collection)
     ws.Rows(1).Font.Bold = True
 
     ' データ行
-    Dim i As Long
+    Dim i   As Long
+    Dim row As Long
     For i = 1 To createdSheets.Count
-        Dim row As Long
         row = i + 1
         ws.Cells(row, 2).Value = createdSheets(i)
         ws.Cells(row, 3).Formula = "=HYPERLINK(""#'""&B" & row & "&""'!A1"",""⇒""&B" & row & ")"
@@ -424,14 +424,14 @@ Public Sub CleanupEmptyPatternSheets()
     Dim emptySheets As New Collection   ' 削除候補（空シート名）
     Dim linkRows    As New Collection   ' 対応するシートリンクの行番号
 
-    Dim r As Long
+    Dim r         As Long
+    Dim sheetName As String
+    Dim ws        As Worksheet
     r = 2  ' 1行目はヘッダー
     Do While linkWs.Cells(r, 2).Value <> ""
-        Dim sheetName As String
         sheetName = CStr(linkWs.Cells(r, 2).Value)
 
         If SheetExists(targetWb, sheetName) Then
-            Dim ws As Worksheet
             Set ws = targetWb.Worksheets(sheetName)
             If IsSheetEmpty(ws) Then
                 emptySheets.Add sheetName
