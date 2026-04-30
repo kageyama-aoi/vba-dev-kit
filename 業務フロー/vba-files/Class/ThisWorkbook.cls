@@ -553,6 +553,7 @@ Sub GenerateFlowFromSheet()
     Dim defYes()   As String
     Dim defNo()    As String
     Dim defCount   As Long
+    Dim nameDict   As Object
 
     errContext = "定義シート読み取り"
     defLastRow = wsDef.Cells(wsDef.Rows.Count, 1).End(xlUp).Row
@@ -570,13 +571,28 @@ Sub GenerateFlowFromSheet()
     ReDim defYes(1 To defCount)
     ReDim defNo(1 To defCount)
 
+    Set nameDict = CreateObject("Scripting.Dictionary")
+    Dim dupNames As String
     For rowIdx = 1 To defCount
         defNames(rowIdx) = CStr(defData(rowIdx, 1))
         defTexts(rowIdx) = CStr(defData(rowIdx, 2))
         defKinds(rowIdx) = CStr(defData(rowIdx, 3))
         defYes(rowIdx)   = CStr(defData(rowIdx, 4))
         defNo(rowIdx)    = CStr(defData(rowIdx, 5))
+        If defNames(rowIdx) <> "" Then
+            If nameDict.Exists(defNames(rowIdx)) Then
+                dupNames = dupNames & "  ・" & defNames(rowIdx) & "（" & rowIdx + 1 & "行目）" & vbCrLf
+            Else
+                nameDict(defNames(rowIdx)) = rowIdx
+            End If
+        End If
     Next rowIdx
+
+    If dupNames <> "" Then
+        MsgBox "定義シートに図形名の重複があります。中止します。" & vbCrLf & vbCrLf & dupNames, _
+               vbExclamation, "GenerateFlowFromSheet"
+        GoTo Cleanup
+    End If
 
     ' T3: 図形配置ループ（縦一列、B列の Left 座標、2行目の Top から開始）
     errContext = "図形配置"
