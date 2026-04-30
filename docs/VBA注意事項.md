@@ -2,51 +2,93 @@
 
 以下のVBA特有の制約・注意事項を必ず守って実装してください。
 
+> **読むタイミング：** 新規モジュール作成時は **A** → Excelを操作するときは **B** → 挙動がおかしいときは **C**
+
 ---
 
 ### 目次（一覧）
 
+#### A：モジュール骨格（新規作成時に確認）
+
 | # | 項目 | 一言メモ |
 |---|------|---------|
-| 1 | 文字コード（UTF-8） | 読み込みは ADODB.Stream。BOM除去も忘れずに |
-| 2 | Excel操作（パフォーマンス） | ループ内で Cells を直接触らない。配列経由で |
-| 3 | パフォーマンス設定の定型句 | ScreenUpdating / Calculation / EnableEvents を Cleanup とセットで |
-| 4 | 処理進捗の表示（StatusBar） | 長い処理は StatusBar で状況を見せる |
-| 5 | エラー発生箇所の特定（errContext） | フェーズ名をメッセージに含める |
-| 6 | 変数宣言の位置 | Dim はすべて関数先頭にまとめる |
-| 7 | 固定サイズ配列と動的配列 | ReDim Preserve したいなら `Dim arr()` で動的宣言 |
-| 8 | UsedRangeの使用禁止 | 最終行は `End(xlUp).Row` で取る |
-| 9 | Variant配列の扱い | Range.Value は2次元・1始まり。単一セルは IsArray で判定 |
-| 10 | 配列書き込み | Resize.Value = 配列 で一括書き込み |
-| 11 | And / Or は短絡評価しない | 配列境界チェックと配列アクセスは条件を分けて書く |
-| 12 | ByRefエラー対策 | Variant要素を String 引数に渡す時は CStr() か ByVal |
-| 13 | モジュール変数のスコープ | モジュールレベルは Private 明示。定数は Private Const に |
-| 14 | Dictionaryへのオブジェクト格納 | Collection等を Dictionary に入れるときは必ず `Set` を付ける |
-| 15 | モジュールレベル宣言の位置 | `Private Const` / `Dim` は最初の Sub より前に書く。関数間はコンパイルエラーになる |
+| A-1 | モジュールレベル宣言の位置 | `Private Const` / `Dim` は最初の Sub より前に書く。関数間はコンパイルエラーになる |
+| A-2 | モジュール変数のスコープ | モジュールレベルは Private 明示。定数は Private Const に |
+| A-3 | 変数宣言の位置 | Dim はすべて関数先頭にまとめる |
+| A-4 | パフォーマンス設定の定型句 | ScreenUpdating / Calculation / EnableEvents を Cleanup とセットで |
+| A-5 | エラー発生箇所の特定（errContext） | フェーズ名をメッセージに含める |
+
+#### B：Excel操作パターン（セル・シートを触るとき）
+
+| # | 項目 | 一言メモ |
+|---|------|---------|
+| B-1 | Excel操作（パフォーマンス） | ループ内で Cells を直接触らない。配列経由で |
+| B-2 | UsedRangeの使用禁止 | 最終行は `End(xlUp).Row` で取る |
+| B-3 | Variant配列の扱い | Range.Value は2次元・1始まり。単一セルは IsArray で判定 |
+| B-4 | 配列書き込み | Resize.Value = 配列 で一括書き込み |
+| B-5 | 処理進捗の表示（StatusBar） | 長い処理は StatusBar で状況を見せる |
+
+#### C：コーディング落とし穴（VBA固有の罠）
+
+| # | 項目 | 一言メモ |
+|---|------|---------|
+| C-1 | 文字コード（UTF-8） | 読み込みは ADODB.Stream。BOM除去も忘れずに |
+| C-2 | 固定サイズ配列と動的配列 | ReDim Preserve したいなら `Dim arr()` で動的宣言 |
+| C-3 | And / Or は短絡評価しない | 配列境界チェックと配列アクセスは条件を分けて書く |
+| C-4 | ByRefエラー対策 | Variant要素を String 引数に渡す時は CStr() か ByVal |
+| C-5 | Dictionaryへのオブジェクト格納 | Collection等を Dictionary に入れるときは必ず `Set` を付ける |
 
 ---
 
-### ■ 文字コード（UTF-8）
+## セクション A：モジュール骨格
 
-・VBAはUTF-8を直接読み込めないため、ファイル読み込みは ADODB.Stream を使用すること
-・Charset は "UTF-8" を指定すること
-・UTF-8 BOM が含まれる可能性があるため、先頭文字のBOM除去を行うこと
+### ■ A-1 モジュールレベル宣言の位置
+
+・`Private Const` / `Dim` などのモジュールレベル宣言は、**最初の Sub / Function より前**にすべてまとめること
+・Sub / Function の間に挟むと「End Sub, End Function または End Property 以降には、コメントのみが記述できます」コンパイルエラーになる
+・既存モジュールに定数を追加するときは、ファイル先頭の定数ブロックに追記すること
 
 ```vba
-If Left(content, 1) = Chr(65279) Then content = Mid(content, 2)
+' NG：関数の間に Private Const を置くとコンパイルエラー
+End Function
+
+Private Const NEW_CONST As String = "値"   ' ← ここに置くと NG
+
+Sub NextSub()
+
+' OK：先頭の定数ブロックにまとめる
+Private Const EXISTING_CONST As String = "既存"
+Private Const NEW_CONST       As String = "値"   ' ← 先頭ブロックに追加
+
+Function FirstFunc()
+```
+
+【実例】WriteRunLog 追加時に `Private Const RUN_LOG_SHEET_NAME` を `ResolveFilePath` の直後に置いたため、
+  コンパイルエラーが発生した。定数を先頭の定数ブロックへ移動して解消。
+
+---
+
+### ■ A-2 モジュール変数のスコープ
+
+・モジュールレベルの変数は `Private` を明示すること（`Dim` のみは暗黙 Public 相当）
+・複数箇所で使う文字列定数は `Private Const` にまとめること
+
+```vba
+Private Const OUTPUT_SHEET_NAME As String = "テーブル定義"
+Private IMAGE_SCALE As Double
 ```
 
 ---
 
-### ■ Excel操作（パフォーマンス）
+### ■ A-3 変数宣言の位置
 
-・Excelセルへのアクセスは遅いため、ループ内で Cells を直接操作しないこと
-・データは一度配列に格納して処理すること
-・Excelへの書き込みは最後にまとめて行うこと
+・`Dim` はすべてサブルーチン・関数の**先頭**にまとめること
+・ループ内・条件分岐内の `Dim` は VBA では関数スコープになるが、
+  意図が伝わらず混乱するため禁止
 
 ---
 
-### ■ パフォーマンス設定の定型句
+### ■ A-4 パフォーマンス設定の定型句
 
 Sub の先頭と Cleanup に必ず入れること。
 エラーが発生しても必ず復元されるよう `On Error GoTo Cleanup` とセットで使うこと。
@@ -66,19 +108,7 @@ Application.StatusBar      = False
 
 ---
 
-### ■ 処理進捗の表示（StatusBar）
-
-処理中かどうかユーザーが判断できるよう StatusBar を活用すること。
-
-```vba
-Application.StatusBar = "処理中... テーブル X / Y"
-```
-
-処理完了後は必ず `Application.StatusBar = False` でリセットすること。
-
----
-
-### ■ エラー発生箇所の特定（errContext）
+### ■ A-5 エラー発生箇所の特定（errContext）
 
 大きな処理ではフェーズ名を `errContext` 変数で管理し、エラーメッセージに含めること。
 「エラーが発生しました」だけでは原因特定に時間がかかる。
@@ -98,15 +128,80 @@ End If
 
 ---
 
-### ■ 変数宣言の位置
+## セクション B：Excel操作パターン
 
-・`Dim` はすべてサブルーチン・関数の**先頭**にまとめること
-・ループ内・条件分岐内の `Dim` は VBA では関数スコープになるが、
-  意図が伝わらず混乱するため禁止
+### ■ B-1 Excel操作（パフォーマンス）
+
+・Excelセルへのアクセスは遅いため、ループ内で Cells を直接操作しないこと
+・データは一度配列に格納して処理すること
+・Excelへの書き込みは最後にまとめて行うこと
 
 ---
 
-### ■ 固定サイズ配列と動的配列
+### ■ B-2 UsedRangeの使用禁止
+
+・UsedRangeは不正確になる場合があるため使用しないこと
+・最終行の取得は以下の方法を使用すること
+
+```vba
+lastRow = ws.Cells(ws.Rows.Count, col).End(xlUp).Row
+```
+
+---
+
+### ■ B-3 Variant配列の扱い
+
+・Range.Valueで取得したデータは2次元配列になる
+・配列は1始まり（1-based）である
+・ループは `UBound(data, 1)` を使用すること
+・配列アクセスは `data(i, 1)` のように2次元で行うこと
+・単一セルの場合は配列にならないため `IsArray` で判定すること
+
+---
+
+### ■ B-4 配列書き込み
+
+・セルに1件ずつ書き込まず、配列をそのままRangeに代入すること
+
+```vba
+' NG（行数分のCOM呼び出しが発生）
+For i = 1 To 1000
+    ws.Cells(i, 1).Value = data(i)
+Next i
+
+' OK（1回のCOM呼び出しで完了）
+ws.Range("A1").Resize(1000, 1).Value = data
+```
+
+---
+
+### ■ B-5 処理進捗の表示（StatusBar）
+
+処理中かどうかユーザーが判断できるよう StatusBar を活用すること。
+
+```vba
+Application.StatusBar = "処理中... テーブル X / Y"
+```
+
+処理完了後は必ず `Application.StatusBar = False` でリセットすること。
+
+---
+
+## セクション C：コーディング落とし穴
+
+### ■ C-1 文字コード（UTF-8）
+
+・VBAはUTF-8を直接読み込めないため、ファイル読み込みは ADODB.Stream を使用すること
+・Charset は "UTF-8" を指定すること
+・UTF-8 BOM が含まれる可能性があるため、先頭文字のBOM除去を行うこと
+
+```vba
+If Left(content, 1) = Chr(65279) Then content = Mid(content, 2)
+```
+
+---
+
+### ■ C-2 固定サイズ配列と動的配列
 
 ・`ReDim Preserve` を使う配列は `Dim arr()` で動的宣言すること
 ・`Dim arr(99)` と宣言した後の `ReDim` はコンパイルエラーになる
@@ -124,44 +219,7 @@ ReDim Preserve arr(0 To colCount - 1)  ' → OK
 
 ---
 
-### ■ UsedRangeの使用禁止
-
-・UsedRangeは不正確になる場合があるため使用しないこと
-・最終行の取得は以下の方法を使用すること
-
-```vba
-lastRow = ws.Cells(ws.Rows.Count, col).End(xlUp).Row
-```
-
----
-
-### ■ Variant配列の扱い
-
-・Range.Valueで取得したデータは2次元配列になる
-・配列は1始まり（1-based）である
-・ループは `UBound(data, 1)` を使用すること
-・配列アクセスは `data(i, 1)` のように2次元で行うこと
-・単一セルの場合は配列にならないため `IsArray` で判定すること
-
----
-
-### ■ 配列書き込み
-
-・セルに1件ずつ書き込まず、配列をそのままRangeに代入すること
-
-```vba
-' NG（行数分のCOM呼び出しが発生）
-For i = 1 To 1000
-    ws.Cells(i, 1).Value = data(i)
-Next i
-
-' OK（1回のCOM呼び出しで完了）
-ws.Range("A1").Resize(1000, 1).Value = data
-```
-
----
-
-### ■ And / Or は短絡評価しない（配列境界外アクセスに注意）
+### ■ C-3 And / Or は短絡評価しない（配列境界外アクセスに注意）
 
 ・VBAの `And` / `Or` は**両辺を必ず評価する**（C言語の `&&` / `||` とは異なる）
 ・`Do While i < rowCount And arr(i) = val` のような書き方は、
@@ -187,7 +245,7 @@ Loop
 
 ---
 
-### ■ ByRefエラー対策
+### ■ C-4 ByRefエラー対策
 
 ・VBAの引数はデフォルトで ByRef であるため、型が一致しないとエラーになる
 ・Variant配列の要素（`arr(i)` など）を String 引数に渡す場合は `CStr()` で変換すること
@@ -206,19 +264,7 @@ Sub MyFunc(ByVal colName As String)
 
 ---
 
-### ■ モジュール変数のスコープ
-
-・モジュールレベルの変数は `Private` を明示すること（`Dim` のみは暗黙 Public 相当）
-・複数箇所で使う文字列定数は `Private Const` にまとめること
-
-```vba
-Private Const OUTPUT_SHEET_NAME As String = "テーブル定義"
-Private IMAGE_SCALE As Double
-```
-
----
-
-### ■ Dictionaryへのオブジェクト格納（Set の省略禁止）
+### ■ C-5 Dictionaryへのオブジェクト格納（Set の省略禁止）
 
 ・Scripting.Dictionary にオブジェクト（Collection・Worksheet 等）を格納するときは必ず `Set` を付けること
 ・`Set` なしで代入すると、VBA はオブジェクトの**既定プロパティの値**を格納しようとする
@@ -235,29 +281,3 @@ If Not dict.Exists(key) Then Set dict(key) = New Collection
 
 【実例】v1.6 で indexDetails（Scripting.Dictionary）に Collection を格納する処理を追加した際、
   3箇所すべてで `Set` が漏れ、ALTER TABLE 行のパース中に Error 450 が発生した。
-
----
-
-### ■ モジュールレベル宣言の位置
-
-・`Private Const` / `Dim` などのモジュールレベル宣言は、**最初の Sub / Function より前**にすべてまとめること
-・Sub / Function の間に挟むと「End Sub, End Function または End Property 以降には、コメントのみが記述できます」コンパイルエラーになる
-・既存モジュールに定数を追加するときは、ファイル先頭の定数ブロックに追記すること
-
-```vba
-' NG：関数の間に Private Const を置くとコンパイルエラー
-End Function
-
-Private Const NEW_CONST As String = "値"   ' ← ここに置くと NG
-
-Sub NextSub()
-
-' OK：先頭の定数ブロックにまとめる
-Private Const EXISTING_CONST As String = "既存"
-Private Const NEW_CONST       As String = "値"   ' ← 先頭ブロックに追加
-
-Function FirstFunc()
-```
-
-【実例】WriteRunLog 追加時に `Private Const RUN_LOG_SHEET_NAME` を `ResolveFilePath` の直後に置いたため、
-  コンパイルエラーが発生した。定数を先頭の定数ブロックへ移動して解消。
