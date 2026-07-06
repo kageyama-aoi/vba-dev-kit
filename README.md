@@ -19,7 +19,7 @@ VBA（Excel）開発のための共有ナレッジ・スキル管理リポジト
 │   ├── 雑多指示を整えるプロンプト.md
 │   └── archive/                # ナレッジの更新履歴
 └── .agent/skills/              # AIスキル定義
-    ├── make_project/           # 新規プロジェクト作成
+    ├── make-project/           # 新規プロジェクト作成
     ├── vba-spec/               # 要件整理
     ├── vba-new-module/         # 新規モジュール作成
     ├── vba-review/             # コードレビュー
@@ -49,7 +49,7 @@ AIへの指示文にスキル名を含めるだけで自動的に発動する。
 
 | やりたいこと | AIへの指示例 |
 |------------|------------|
-| 新規プロジェクトを作る | 「make_project スキルを使って新しいプロジェクトを作りたい」 |
+| 新規プロジェクトを作る | 「make-project スキルを使って新しいプロジェクトを作りたい」 |
 | 要件を整理したい | 「vba-spec スキルで要件を整理して」 |
 | モジュールをゼロから作る | 「vba-new-module スキルでモジュールを作って」 |
 | 一気通貫で実装したい | 「vba-implement スキルでツールを作って」 |
@@ -69,7 +69,7 @@ AIへの指示文にスキル名を含めるだけで自動的に発動する。
 **AIへの指示**
 
 ```
-make_project スキルを使って新しいプロジェクトを作りたい
+make-project スキルを使って新しいプロジェクトを作りたい
 ```
 
 AIが以下を確認してくるので答える：
@@ -144,7 +144,7 @@ AIが以下を自動で行う：
 
 | スキル | SKILL.md | 役割 |
 |-------|----------|------|
-| make_project | `.agent/skills/make_project/` | 新規プロジェクト作成 |
+| make-project | `.agent/skills/make-project/` | 新規プロジェクト作成 |
 | vba-spec | `.agent/skills/vba-spec/` | 要件整理・SPEC.md生成 |
 | vba-new-module | `.agent/skills/vba-new-module/` | 新規モジュール作成 |
 | vba-implement | `.agent/skills/vba-implement/` | 仕様〜.clsまで一気通貫 |

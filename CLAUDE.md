@@ -91,7 +91,7 @@
 | `vba-review` | 実装完了後・修正後のレビュー |
 | `vba-implement` | 仕様から .cls ファイルまで一気通貫で作るとき |
 | `vba-knowledge-update` | 新しい知見をナレッジに追記・並び替えするとき |
-| `make_project` | 新規プロジェクトを立ち上げるとき |
+| `make-project` | 新規プロジェクトを立ち上げるとき |
 
 ---
 
