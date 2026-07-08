@@ -347,13 +347,8 @@ Sub SetupDefSheet()
 
     If Not LoadConfig() Then Exit Sub
 
-    Dim targetWb  As Workbook
-    Dim wsTmp     As Worksheet
-    Dim errContext As String
-
-    On Error GoTo Cleanup
-    Application.ScreenUpdating = False
-    errContext = "対象ブック特定"
+    Dim targetWb As Workbook
+    Dim wsTmp    As Worksheet
 
     ' 対象ブックを特定（フローシートが存在するブック）
     Dim wsFlow As Worksheet
@@ -372,8 +367,7 @@ Sub SetupDefSheet()
         dlgAns = MsgBox("「" & m_DefSheet & "」シートはすでに存在します。" & vbCrLf & _
                         "内容をリセットしますか？（既存データは失われます）", _
                         vbYesNo + vbExclamation, "定義シートの初期化")
-        If dlgAns <> vbYes Then GoTo Cleanup
-        errContext = "シート初期化"
+        If dlgAns <> vbYes Then Exit Sub
         wsDef.Cells.ClearContents
         wsDef.Cells.ClearFormats
         wsDef.Cells.Validation.Delete
@@ -427,8 +421,8 @@ Sub SetupDefSheet()
     sampleData(3, 4) = "Flow_001" : sampleData(3, 5) = "Flow_002"
 
     Dim sr As Long
-    Dim sc As Long
     For sr = 1 To 3
+        Dim sc As Long
         For sc = 1 To 5
             With wsDef.Cells(sr + 1, sc)
                 .Value     = sampleData(sr, sc)
@@ -459,12 +453,6 @@ Sub SetupDefSheet()
            "C列の種別はドロップダウンから選択できます。", _
            vbInformation, "定義シート作成完了"
 
-Cleanup:
-    Application.ScreenUpdating = True
-    If Err.Number <> 0 Then
-        MsgBox "エラー（" & errContext & "）: " & Err.Description, vbCritical, "エラー"
-    End If
-
 End Sub
 
 
@@ -484,9 +472,8 @@ Sub GenerateFlowFromSheet()
     If Not LoadConfig() Then Exit Sub
 
     ' --- 対象ブック・シート取得 ---
-    Dim ws         As Worksheet
-    Dim wsDef      As Worksheet
-    Dim errContext As String
+    Dim ws    As Worksheet
+    Dim wsDef As Worksheet
 
     Set ws = GetTargetSheet(m_FlowSheet)
     If ws Is Nothing Then Exit Sub
@@ -502,11 +489,7 @@ Sub GenerateFlowFromSheet()
         Exit Sub
     End If
 
-    On Error GoTo Cleanup
-    Application.ScreenUpdating = False
-
     ' T2: 既存図形の確認（ボタン・1行目除外）
-    errContext = "既存図形確認"
     Dim shp     As Shape
     Dim row1H   As Double
     Dim exCount As Long
@@ -523,10 +506,9 @@ Sub GenerateFlowFromSheet()
         dlgAns = MsgBox("フローシートに既存の図形が " & exCount & " 個あります。" & vbCrLf & _
                         "クリアして再生成しますか？", _
                         vbYesNo + vbExclamation, "既存図形の確認")
-        If dlgAns <> vbYes Then GoTo Cleanup
+        If dlgAns <> vbYes Then Exit Sub
 
         ' ユーザーが「はい」→ 対象図形を全削除
-        errContext = "既存図形削除"
         Dim toDelete() As String
         Dim delCount   As Long
         delCount = 0
@@ -543,59 +525,39 @@ Sub GenerateFlowFromSheet()
         Next di
     End If
 
-    ' T1: 定義シートの一括読み取り（B-1 対応：Range.Value で配列に一括取得）
-    Dim defLastRow As Long
-    Dim defData    As Variant
-    Dim rowIdx     As Long
+    ' T1: 定義シートの読み込み（2行目から、A列が空になったら終了）
+    Dim rowIdx   As Long
     Dim defNames() As String
     Dim defTexts() As String
     Dim defKinds() As String
     Dim defYes()   As String
     Dim defNo()    As String
     Dim defCount   As Long
-    Dim nameDict   As Object
 
-    errContext = "定義シート読み取り"
-    defLastRow = wsDef.Cells(wsDef.Rows.Count, 1).End(xlUp).Row
-    If defLastRow < 2 Then
+    rowIdx   = 2   ' 1行目はヘッダー
+    defCount = 0
+
+    Do While wsDef.Cells(rowIdx, 1).Value <> ""
+        defCount = defCount + 1
+        ReDim Preserve defNames(1 To defCount)
+        ReDim Preserve defTexts(1 To defCount)
+        ReDim Preserve defKinds(1 To defCount)
+        ReDim Preserve defYes(1 To defCount)
+        ReDim Preserve defNo(1 To defCount)
+        defNames(defCount) = CStr(wsDef.Cells(rowIdx, 1).Value)
+        defTexts(defCount) = CStr(wsDef.Cells(rowIdx, 2).Value)
+        defKinds(defCount) = CStr(wsDef.Cells(rowIdx, 3).Value)
+        defYes(defCount)   = CStr(wsDef.Cells(rowIdx, 4).Value)
+        defNo(defCount)    = CStr(wsDef.Cells(rowIdx, 5).Value)
+        rowIdx = rowIdx + 1
+    Loop
+
+    If defCount = 0 Then
         MsgBox "定義シートに図形データがありません。", vbExclamation, "GenerateFlowFromSheet"
-        GoTo Cleanup
-    End If
-
-    defData  = wsDef.Range("A2:E" & defLastRow).Value
-    defCount = UBound(defData, 1)
-
-    ReDim defNames(1 To defCount)
-    ReDim defTexts(1 To defCount)
-    ReDim defKinds(1 To defCount)
-    ReDim defYes(1 To defCount)
-    ReDim defNo(1 To defCount)
-
-    Set nameDict = CreateObject("Scripting.Dictionary")
-    Dim dupNames As String
-    For rowIdx = 1 To defCount
-        defNames(rowIdx) = CStr(defData(rowIdx, 1))
-        defTexts(rowIdx) = CStr(defData(rowIdx, 2))
-        defKinds(rowIdx) = CStr(defData(rowIdx, 3))
-        defYes(rowIdx)   = CStr(defData(rowIdx, 4))
-        defNo(rowIdx)    = CStr(defData(rowIdx, 5))
-        If defNames(rowIdx) <> "" Then
-            If nameDict.Exists(defNames(rowIdx)) Then
-                dupNames = dupNames & "  ・" & defNames(rowIdx) & "（" & rowIdx + 1 & "行目）" & vbCrLf
-            Else
-                nameDict(defNames(rowIdx)) = rowIdx
-            End If
-        End If
-    Next rowIdx
-
-    If dupNames <> "" Then
-        MsgBox "定義シートに図形名の重複があります。中止します。" & vbCrLf & vbCrLf & dupNames, _
-               vbExclamation, "GenerateFlowFromSheet"
-        GoTo Cleanup
+        Exit Sub
     End If
 
     ' T3: 図形配置ループ（縦一列、B列の Left 座標、2行目の Top から開始）
-    errContext = "図形配置"
     Const SHAPE_W   As Double = 120   ' 図形幅（ポイント）
     Const SHAPE_H   As Double = 40    ' 図形高さ（ポイント）
     Const SHAPE_GAP As Double = 20    ' 図形間隔（ポイント）
@@ -609,10 +571,9 @@ Sub GenerateFlowFromSheet()
     Dim shapeMap As Object
     Set shapeMap = CreateObject("Scripting.Dictionary")
 
-    Dim newShp    As Shape
-    Dim shpCount  As Long
-    Dim curTop    As Double
-    Dim shapeType As Long
+    Dim newShp   As Shape
+    Dim shpCount As Long
+    Dim curTop   As Double
     curTop   = startTop
     shpCount = 0
 
@@ -620,6 +581,7 @@ Sub GenerateFlowFromSheet()
     For ii = 1 To defCount
 
         ' 種別→msoAutoShapeType 変換
+        Dim shapeType As Long
         Select Case defKinds(ii)
             Case "判断"
                 shapeType = msoShapeDiamond
@@ -637,7 +599,7 @@ Sub GenerateFlowFromSheet()
             newShp.TextFrame2.TextRange.Text = defTexts(ii)
         End If
 
-        shapeMap(defNames(ii)) = newShp
+        Set shapeMap(defNames(ii)) = newShp
         shpCount = shpCount + 1
 
         curTop = curTop + SHAPE_H + SHAPE_GAP
@@ -645,7 +607,6 @@ Sub GenerateFlowFromSheet()
     Next ii
 
     ' T4: 接続線の生成（YES/NO接続先を走査）
-    errContext = "接続線生成"
     Dim connCount As Long
     Dim fromShp   As Shape
     Dim toShp     As Shape
@@ -677,12 +638,6 @@ Sub GenerateFlowFromSheet()
     Application.OnTime Now + TimeValue("00:00:03"), "'" & ThisWorkbook.Name & "'!ThisWorkbook.ClearStatusBar"
 
     ws.Activate
-
-Cleanup:
-    Application.ScreenUpdating = True
-    If Err.Number <> 0 Then
-        MsgBox "エラー（" & errContext & "）: " & Err.Description, vbCritical, "GenerateFlowFromSheet"
-    End If
 
 End Sub
 
@@ -716,21 +671,18 @@ Sub ExportFlowData()
 
     For Each shp In ws.Shapes
         If shp.Connector Then
-            srcName = ""
-            dstName = ""
-            Err.Clear
             On Error Resume Next
             srcName = shp.ConnectorFormat.BeginConnectedShape.Name
-            Err.Clear
             dstName = shp.ConnectorFormat.EndConnectedShape.Name
-            On Error GoTo 0
-            If srcName <> "" And dstName <> "" Then
+            If Err.Number = 0 And srcName <> "" And dstName <> "" Then
                 If connMap.Exists(srcName) Then
                     connMap(srcName) = connMap(srcName) & "," & dstName
                 Else
                     connMap(srcName) = dstName
                 End If
             End If
+            Err.Clear
+            On Error GoTo 0
         End If
     Next shp
 
@@ -1309,15 +1261,13 @@ Sub InjectTextFromList()
 
     If Not LoadConfig() Then Exit Sub
 
-    Dim wsDef      As Worksheet
-    Dim ws         As Worksheet
-    Dim shp        As Shape
-    Dim i          As Long
-    Dim shpName    As String
-    Dim txt        As String
-    Dim hitCount   As Long
-    Dim defLastRow As Long
-    Dim defData    As Variant
+    Dim wsDef    As Worksheet
+    Dim ws       As Worksheet
+    Dim shp      As Shape
+    Dim i        As Long
+    Dim shpName  As String
+    Dim txt      As String
+    Dim hitCount As Long
 
     Set wsDef = GetTargetSheet(m_DefSheet)
     If wsDef Is Nothing Then Exit Sub
@@ -1325,32 +1275,27 @@ Sub InjectTextFromList()
     Set ws = GetTargetSheet(m_FlowSheet)
     If ws Is Nothing Then Exit Sub
 
-    hitCount   = 0
-    defLastRow = wsDef.Cells(wsDef.Rows.Count, 1).End(xlUp).Row
+    hitCount = 0
+    i = 2   ' 1行目はヘッダーとして読み飛ばし
 
-    If defLastRow >= 2 Then
+    Do While wsDef.Cells(i, 1).Value <> ""
 
-        defData = wsDef.Range("A2:B" & defLastRow).Value
+        shpName = Trim(wsDef.Cells(i, 1).Value)
+        txt = Trim(wsDef.Cells(i, 2).Value)
 
-        For i = 1 To UBound(defData, 1)
+        Set shp = Nothing   ' 前ループの値を必ずクリア
+        On Error Resume Next
+        Set shp = ws.Shapes(shpName)
+        On Error GoTo 0
 
-            shpName = Trim(CStr(defData(i, 1)))
-            txt     = Trim(CStr(defData(i, 2)))
-
+        If Not shp Is Nothing Then
+            Call FlowStyle(shp, txt)
+            hitCount = hitCount + 1
             Set shp = Nothing
-            On Error Resume Next
-            Set shp = ws.Shapes(shpName)
-            On Error GoTo 0
+        End If
 
-            If Not shp Is Nothing Then
-                Call FlowStyle(shp, txt)
-                hitCount = hitCount + 1
-                Set shp = Nothing
-            End If
-
-        Next i
-
-    End If
+        i = i + 1
+    Loop
 
     Application.StatusBar = "テキスト注入完了：" & hitCount & " 件"
     Application.OnTime Now + TimeValue("0:00:03"), "'" & ThisWorkbook.Name & "'!ThisWorkbook.ClearStatusBar"
@@ -1379,22 +1324,17 @@ Sub RenameShapesSequentially()
 
     If Not LoadConfig() Then Exit Sub
 
-    Dim ws         As Worksheet
-    Dim arr()      As Shape
-    Dim n          As Long
-    Dim i          As Long
-    Dim errContext As String
+    Dim ws  As Worksheet
+    Dim arr() As Shape
+    Dim n   As Long
+    Dim i   As Long
 
     Set ws = GetTargetSheet(m_FlowSheet)
     If ws Is Nothing Then Exit Sub
 
-    On Error GoTo Cleanup
-    Application.ScreenUpdating = False
-
-    errContext = "図形収集"
     If ws.Shapes.count = 0 Then
         MsgBox "図形がありません", vbInformation
-        GoTo Cleanup
+        Exit Sub
     End If
 
     ' ボタン系・1行目を除外して収集
@@ -1414,11 +1354,10 @@ Sub RenameShapesSequentially()
     If n = 0 Then
         MsgBox "対象図形がありません。" & vbCrLf & _
                "（ボタンおよび 1 行目の図形は除外されます）", vbInformation, "連番命名"
-        GoTo Cleanup
+        Exit Sub
     End If
 
     ' Top 座標順にソート
-    errContext = "図形ソート・命名"
     Call SortShapesByAxis(arr, n, "Top")
 
     ' 種別を判定して通し番号で命名
@@ -1430,17 +1369,10 @@ Sub RenameShapesSequentially()
     Application.OnTime Now + TimeValue("0:00:03"), "'" & ThisWorkbook.Name & "'!ThisWorkbook.ClearStatusBar"
 
     ' --- 図形一覧シートに書き出す ---
-    errContext = "図形一覧書き出し"
     Call ExportShapeList(ws.Parent, arr, n)
 
     ws.Parent.Activate
     ws.Activate
-
-Cleanup:
-    Application.ScreenUpdating = True
-    If Err.Number <> 0 Then
-        MsgBox "エラー（" & errContext & "）: " & Err.Description, vbCritical, "RenameShapesSequentially"
-    End If
 
 End Sub
 
@@ -1460,16 +1392,11 @@ Sub SetupFlowButtons()
 
     If Not LoadConfig() Then Exit Sub
 
-    Dim ws         As Worksheet
-    Dim errContext As String
+    Dim ws As Worksheet
     Set ws = GetTargetSheet(m_FlowSheet)
     If ws Is Nothing Then Exit Sub
 
-    On Error GoTo Cleanup
-    Application.ScreenUpdating = False
-
     ' --- 既存の BTN_FLOW_ ボタンを削除 ---
-    errContext = "既存ボタン削除"
     Dim shp        As Shape
     Dim toDelete() As String
     Dim delCount   As Long
@@ -1541,7 +1468,6 @@ Sub SetupFlowButtons()
     Dim btn     As Shape
 
     ' --- 全14ボタンを横1行に配置 ---
-    errContext = "ボタン配置"
     curLeft = startLeft
     curTop  = startTop
 
@@ -1594,12 +1520,6 @@ Sub SetupFlowButtons()
     MsgBox "14個のボタンを「" & m_FlowSheet & "」シートの上部に配置しました。" & vbCrLf & _
            "マクロブック（" & macroBook & "）が開いている状態でクリックしてください。", _
            vbInformation, "ボタン配置完了"
-
-Cleanup:
-    Application.ScreenUpdating = True
-    If Err.Number <> 0 Then
-        MsgBox "エラー（" & errContext & "）: " & Err.Description, vbCritical, "SetupFlowButtons"
-    End If
 
 End Sub
 
