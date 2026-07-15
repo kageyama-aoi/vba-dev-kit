@@ -1,0 +1,26 @@
+# ----- 依存パッケージ -----
+/node_modules
+/xvba_modules
+
+# ----- ログ -----
+logs/
+.claude/bash-log.txt
+
+# ----- バックアップ -----
+/xvba_excel_backup
+
+# ----- Excel バイナリ (VBAソースは vba-files/ で管理) -----
+*.xlsm
+*.xlsx
+*.xls
+
+# ----- ツール固有 -----
+.claude/settings.local.json
+
+# ----- VBE変換作業用（Shift-JIS中間ファイル）-----
+vba-files/_vbe/
+
+# ----- OS / IDE -----
+.DS_Store
+Thumbs.db
+desktop.ini
